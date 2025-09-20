@@ -17,7 +17,7 @@ async function runOnce(prompt: string) {
   ];
 
   const stream = await streamText({
-    model: openai('gpt-5-nano'),
+    model: openai('gpt-5-mini'),
     messages,
     experimental_telemetry: { isEnabled: true },
     providerOptions: {
@@ -43,7 +43,18 @@ async function main() {
   }
 
   const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(new AiSdkTokenExporter(consoleSink())));
+  provider.addSpanProcessor(
+    new SimpleSpanProcessor(
+      new AiSdkTokenExporter(consoleSink(), {
+        getContext() {
+          return {
+            userId: 'demo-user-openai',
+            workspaceId: 'demo-workspace-openai'
+          };
+        }
+      })
+    )
+  );
   provider.register();
 
   try {
@@ -66,7 +77,6 @@ async function main() {
     const cachedTokens = Number(
       (cool.usage?.cachedInputTokens ??
         cool.metadata?.openai?.cachedPromptTokens ??
-        cool.metadata?.openai?.usage?.cachedPromptTokens ??
         0)
     );
     if (!(cachedTokens > 0)) {

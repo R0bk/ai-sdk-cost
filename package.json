@@ -20,7 +20,8 @@
     "fetch:prices": "tsx scripts/fetch-prices.ts",
     "example": "tsx examples/basic.ts",
     "test:external:openai": "tsx examples/test-external-openai.ts",
-    "test:external:anthropic": "tsx examples/test-external-anthropic.ts"
+    "test:external:anthropic": "tsx examples/test-external-anthropic.ts",
+    "test:pricing": "tsx scripts/verify-pricing.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",

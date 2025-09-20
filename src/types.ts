@@ -8,6 +8,8 @@ export type TokenLog = {
   cache_write: number;
   cost_cents?: number | null;
   finish_reason?: string | null;
+  user_id?: string | null;
+  workspace_id?: string | null;
   traceId?: string;
   spanId?: string;
   attributes?: Record<string, unknown>;

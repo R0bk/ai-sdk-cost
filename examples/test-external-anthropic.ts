@@ -42,7 +42,18 @@ async function main() {
   }
 
   const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(new AiSdkTokenExporter(consoleSink())));
+  provider.addSpanProcessor(
+    new SimpleSpanProcessor(
+      new AiSdkTokenExporter(consoleSink(), {
+        getContext() {
+          return {
+            userId: 'demo-user-anthropic',
+            workspaceId: 'demo-workspace-anthropic'
+          };
+        }
+      })
+    )
+  );
   provider.register();
 
   try {

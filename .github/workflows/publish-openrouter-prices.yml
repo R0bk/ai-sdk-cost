@@ -18,11 +18,21 @@ jobs:
       - run: corepack enable
       - name: Install dependencies
         run: pnpm install --frozen-lockfile || pnpm install
-      - name: Fetch and publish
-        env:
-          GITHUB_OWNER: ${{ github.repository_owner }}
-          GITHUB_REPO: ${{ github.event.repository.name }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_BRANCH: ${{ github.ref_name || 'main' }}
-          PRICES_PATH: data/openrouter-pricing.json
+      - name: Refresh pricing snapshot
         run: pnpm run fetch:prices
+      - name: Rebuild dist artifacts
+        run: pnpm run build
+      - name: Commit and push changes
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git add src/data/openrouter-pricing.json dist
+          git commit -m "chore: refresh OpenRouter pricing snapshot"
+          git push

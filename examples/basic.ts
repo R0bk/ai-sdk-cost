@@ -4,7 +4,15 @@ import { AiSdkTokenExporter, consoleSink } from '../src';
 
 async function main() {
   const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(new AiSdkTokenExporter(consoleSink())));
+  provider.addSpanProcessor(
+    new SimpleSpanProcessor(
+      new AiSdkTokenExporter(consoleSink(), {
+        getContext() {
+          return { userId: 'demo-user', workspaceId: 'demo-workspace' };
+        }
+      })
+    )
+  );
   provider.register();
 
   const tracer = provider.getTracer('ai-sdk-cost-example');

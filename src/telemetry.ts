@@ -5,11 +5,38 @@ import { packagedOpenRouterPricing } from './openrouter';
 
 type Attrs = Record<string, unknown>;
 
+export type ExporterContextResolver = (span: ReadableSpan, attrs: Attrs) => {
+  userId?: string | null;
+  workspaceId?: string | null;
+} | undefined | null;
+
+export type ExporterOptions = {
+  getContext?: ExporterContextResolver;
+  userIdAttributes?: string[];
+  workspaceIdAttributes?: string[];
+};
+
 const AI_SPAN_MATCHERS = [
   'ai.generateText.doGenerate',
   'ai.streamText.doStream',
   'ai.generateObject.doGenerate',
   'ai.streamObject.doStream'
+];
+
+const DEFAULT_USER_ID_ATTRS = [
+  'ai.user.id',
+  'ai.userId',
+  'gen_ai.user.id',
+  'gen_ai.userId',
+  'user.id',
+  'userId'
+];
+
+const DEFAULT_WORKSPACE_ID_ATTRS = [
+  'ai.workspace.id',
+  'ai.space.id',
+  'workspace.id',
+  'space.id'
 ];
 
 function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
@@ -86,6 +113,28 @@ function lookupPrice(provider: string | null | undefined, model: string): PriceE
   }
 
   return null;
+}
+
+function resolveContext(
+  span: ReadableSpan,
+  attrs: Attrs,
+  options: ExporterOptions
+): { userId?: string | null; workspaceId?: string | null } {
+  const directContext = options.getContext?.(span, attrs);
+  if (directContext) {
+    return {
+      userId: directContext.userId ?? null,
+      workspaceId: directContext.workspaceId ?? null
+    };
+  }
+
+  const userAttrKeys = options.userIdAttributes ?? DEFAULT_USER_ID_ATTRS;
+  const workspaceAttrKeys = options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ID_ATTRS;
+
+  const userId = (getAttr(attrs, userAttrKeys) ?? null) as string | null;
+  const workspaceId = (getAttr(attrs, workspaceAttrKeys) ?? null) as string | null;
+
+  return { userId, workspaceId };
 }
 
 function computeCostFromUsage(
@@ -222,7 +271,10 @@ function toNumber(value: unknown): number {
 }
 
 export class AiSdkTokenExporter implements SpanExporter {
-  constructor(private readonly sink: TokenLogSink) {}
+  constructor(
+    private readonly sink: TokenLogSink,
+    private readonly options: ExporterOptions = {}
+  ) {}
 
   export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
     (async () => {
@@ -255,6 +307,7 @@ export class AiSdkTokenExporter implements SpanExporter {
             price
           );
           const finishReason = getAttr(attrs, ['ai.response.finishReason', 'gen_ai.response.finish_reasons']);
+          const context = resolveContext(span, attrs, this.options);
 
           const log: TokenLog = {
             time: computeTimestamp(span),
@@ -271,6 +324,8 @@ export class AiSdkTokenExporter implements SpanExporter {
                 : finishReason != null
                   ? String(finishReason)
                   : null,
+            user_id: context.userId ?? null,
+            workspace_id: context.workspaceId ?? null,
             traceId: span.spanContext().traceId,
             spanId: span.spanContext().spanId,
             attributes: attrs
