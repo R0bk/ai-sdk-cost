@@ -19,6 +19,8 @@ export type TelemetryInitOptions = {
   getContext?: ExporterContextResolver;
   /** Map deployment/proxy names to actual model names for accurate pricing. */
   modelMapping?: ModelMapping;
+  /** Include full telemetry attributes in logs (default false, use true for debugging). */
+  includeAttributes?: boolean;
   /** Supply your own span processor (defaults to BatchSpanProcessor). */
   spanProcessor?: SpanProcessor;
   /** Reuse an existing tracer provider. */
@@ -44,7 +46,8 @@ function buildExporterOptions(options: TelemetryInitOptions): ExporterOptions {
     userIdAttributes: options.userIdAttributes ?? DEFAULT_USER_ATTRS,
     workspaceIdAttributes: options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ATTRS,
     getContext: options.getContext,
-    modelMapping: options.modelMapping
+    modelMapping: options.modelMapping,
+    includeAttributes: options.includeAttributes
   };
 }
 

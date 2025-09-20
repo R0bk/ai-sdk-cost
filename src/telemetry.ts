@@ -16,6 +16,7 @@ export type ExporterOptions = {
   userIdAttributes?: string[];
   workspaceIdAttributes?: string[];
   modelMapping?: ModelMapping;
+  includeAttributes?: boolean;
 };
 
 const AI_SPAN_MATCHERS = [
@@ -383,9 +384,13 @@ export class AiSdkTokenExporter implements SpanExporter {
             user_id: context.userId ?? null,
             workspace_id: context.workspaceId ?? null,
             traceId: span.spanContext().traceId,
-            spanId: span.spanContext().spanId,
-            attributes: attrs
+            spanId: span.spanContext().spanId
           };
+
+          // Only include attributes if explicitly requested (for debugging)
+          if (this.options.includeAttributes) {
+            log.attributes = attrs;
+          }
 
           await this.sink.handle(log);
         } catch {

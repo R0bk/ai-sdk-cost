@@ -192,6 +192,19 @@ await streamText({
 
 Priority: Per-call `modelName` > `modelMapping` config > raw model name from provider.
 
+### Debug Mode: Include Full Attributes
+
+For debugging purposes, you can include all telemetry attributes in your logs:
+
+```ts
+initAiSdkCostTelemetry({
+  includeAttributes: true,  // Default: false
+  sink: consoleSink()
+});
+```
+
+With `includeAttributes: true`, logs will include a full `attributes` field containing all OpenTelemetry span attributes. This is useful for debugging but should be disabled in production to reduce log size.
+
 ### Provider-Specific Handling
 
 The library correctly handles each provider's unique telemetry format:
