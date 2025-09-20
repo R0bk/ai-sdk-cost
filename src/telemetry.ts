@@ -1,7 +1,7 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import type { PriceEntry, TokenLog, TokenLogSink } from './types';
+import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 
 type Attrs = Record<string, unknown>;
@@ -15,6 +15,7 @@ export type ExporterOptions = {
   getContext?: ExporterContextResolver;
   userIdAttributes?: string[];
   workspaceIdAttributes?: string[];
+  modelMapping?: ModelMapping;
 };
 
 const AI_SPAN_MATCHERS = [
@@ -327,13 +328,15 @@ export class AiSdkTokenExporter implements SpanExporter {
           if (!looksLikeAiSdkSpan(span)) continue;
           const attrs = (span.attributes ?? {}) as Attrs;
 
-          const model =
+          const rawModel =
             (getAttr(attrs, [
               'gen_ai.request.model',
               'gen_ai.response.model',
               'ai.model.id',
               'ai.response.model'
             ]) as string | undefined) ?? 'unknown';
+
+          const model = this.options.modelMapping?.[rawModel] ?? rawModel;
 
           const provider = getAttr(attrs, ['gen_ai.system', 'ai.model.provider']);
 

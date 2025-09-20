@@ -47,3 +47,5 @@ export type GitHubPublishOptions = {
   path?: string;
   token: string;
 };
+
+export type ModelMapping = Record<string, string>;

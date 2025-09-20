@@ -24,6 +24,9 @@ importers:
       '@ai-sdk/anthropic':
         specifier: ^2.0.17
         version: 2.0.17(zod@3.25.76)
+      '@ai-sdk/google':
+        specifier: 2.0.14
+        version: 2.0.14(zod@3.25.76)
       '@ai-sdk/openai':
         specifier: ^2.0.32
         version: 2.0.32(zod@3.25.76)
@@ -68,6 +71,12 @@ packages:
 
   '@ai-sdk/gateway@1.0.24':
     resolution: {integrity: sha512-Mwp0yYXrEnENoDrc7IH9yVRVJ7RrDW0CXWDtyz1BiyqccbtdWhAKu4wtrDMx2FkeK5riiME1kYYdjRnlba3UFw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4
+
+  '@ai-sdk/google@2.0.14':
+    resolution: {integrity: sha512-OCBBkEUq1RNLkbJuD+ejqGsWDD0M5nRyuFWDchwylxy0J4HSsAiGNhutNYVTdnqmNw+r9LyZlkyZ1P4YfAfLdg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4
@@ -1204,6 +1213,12 @@ snapshots:
       zod: 3.25.76
 
   '@ai-sdk/gateway@1.0.24(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.9(zod@3.25.76)
+      zod: 3.25.76
+
+  '@ai-sdk/google@2.0.14(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.9(zod@3.25.76)

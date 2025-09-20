@@ -1,5 +1,5 @@
 import { consoleSink } from './sinks';
-import type { TokenLogSink } from './types';
+import type { TokenLogSink, ModelMapping } from './types';
 import { AiSdkTokenExporter, type ExporterOptions, type ExporterContextResolver } from './telemetry';
 import type { SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
@@ -17,6 +17,8 @@ export type TelemetryInitOptions = {
   workspaceIdAttributes?: string[];
   /** Custom context resolver hook. */
   getContext?: ExporterContextResolver;
+  /** Map deployment/proxy names to actual model names for accurate pricing. */
+  modelMapping?: ModelMapping;
   /** Supply your own span processor (defaults to BatchSpanProcessor). */
   spanProcessor?: SpanProcessor;
   /** Reuse an existing tracer provider. */
@@ -41,7 +43,8 @@ function buildExporterOptions(options: TelemetryInitOptions): ExporterOptions {
   return {
     userIdAttributes: options.userIdAttributes ?? DEFAULT_USER_ATTRS,
     workspaceIdAttributes: options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ATTRS,
-    getContext: options.getContext
+    getContext: options.getContext,
+    modelMapping: options.modelMapping
   };
 }
 

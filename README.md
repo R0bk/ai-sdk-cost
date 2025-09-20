@@ -149,6 +149,29 @@ const pricing = getPackagedOpenRouterPricing();
 // Returns pricing for OpenAI, Anthropic, Google, DeepSeek, X.AI models
 ```
 
+### Using Proxy Services (Azure, LiteLLM, etc.)
+
+When using proxy services, deployment names often don't match actual model names. Use `modelMapping` to ensure accurate pricing:
+
+```ts
+initAiSdkCostTelemetry({
+  modelMapping: {
+    // Azure OpenAI deployments
+    'my-gpt4-deployment': 'gpt-4o',
+    'prod-claude': 'claude-3-5-sonnet-20241022',
+
+    // LiteLLM proxy names
+    'litellm/fast-model': 'gpt-4o-mini',
+    'litellm/smart-model': 'gpt-4o',
+
+    // Custom internal endpoints
+    'team-a-llm': 'anthropic/claude-3-haiku-20240307'
+  }
+});
+```
+
+Now when your proxy reports `model: "my-gpt4-deployment"`, costs will be calculated using `gpt-4o` pricing.
+
 ### Provider-Specific Handling
 
 The library correctly handles each provider's unique telemetry format:
@@ -162,8 +185,10 @@ The library correctly handles each provider's unique telemetry format:
 See the `examples/` directory for:
 - `basic.ts` - Simple mock telemetry example
 - `express.ts` - Production Express.js integration
-- `test-external-openai.ts` - Live OpenAI integration test
-- `test-external-anthropic.ts` - Live Anthropic integration test
+- `model-mapping.ts` - Using proxy services with model mapping
+- `openai-example.ts` - Live OpenAI integration test
+- `anthropic-example.ts` - Live Anthropic integration test
+- `google-example.ts` - Live Google Gemini integration test
 
 ### GitHub Action for Auto-Updating Prices
 
@@ -186,8 +211,9 @@ pnpm run fetch:prices  # Updates src/data/openrouter-pricing.json
 pnpm run test:pricing
 
 # Live provider tests (requires API keys)
-pnpm run test:external:openai
-pnpm run test:external:anthropic
+pnpm run test:external:openai     # Requires OPENAI_API_KEY
+pnpm run test:external:anthropic  # Requires ANTHROPIC_API_KEY
+pnpm run test:external:google     # Requires GEMINI_API_KEY
 ```
 
 ## License
