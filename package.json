@@ -1,0 +1,47 @@
+{
+  "name": "ai-sdk-cost",
+  "version": "0.1.0",
+  "description": "DB-agnostic cost telemetry helper for Vercel AI SDK with OpenRouter pricing watcher",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsx watch src/index.ts",
+    "fetch:prices": "tsx scripts/fetch-prices.ts",
+    "example": "tsx examples/basic.ts",
+    "test:external:openai": "tsx examples/test-external-openai.ts",
+    "test:external:anthropic": "tsx examples/test-external-anthropic.ts"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/sdk-trace-base": "^1.23.0",
+    "zod": "^3.23.8",
+    "@opentelemetry/core": "^1.30.1"
+  },
+  "devDependencies": {
+    "@opentelemetry/sdk-trace-node": "^1.23.0",
+    "tsup": "^8.2.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "@types/node": "^20.14.11",
+    "ai": "^5.0.47",
+    "openai": "^4.56.0",
+    "@anthropic-ai/sdk": "^0.35.0",
+    "@ai-sdk/openai": "^2.0.32",
+    "@ai-sdk/anthropic": "^2.0.17"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

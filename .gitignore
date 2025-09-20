@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+/dist/
+/out/
+/coverage/
+*.tsbuildinfo
+
+# Environment & local config
+.env
+.env.*
+!.env.example
+
+# Logs & diagnostics
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db

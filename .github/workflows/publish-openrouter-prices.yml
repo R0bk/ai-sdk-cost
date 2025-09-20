@@ -1,0 +1,28 @@
+name: Publish OpenRouter Prices
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+      - name: Fetch and publish
+        env:
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_BRANCH: ${{ github.ref_name || 'main' }}
+          PRICES_PATH: data/openrouter-pricing.json
+        run: pnpm run fetch:prices
