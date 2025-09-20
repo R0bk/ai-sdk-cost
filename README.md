@@ -249,6 +249,10 @@ pnpm run test:external:anthropic  # Requires ANTHROPIC_API_KEY
 pnpm run test:external:google     # Requires GEMINI_API_KEY
 ```
 
+[![npm version](https://badge.fury.io/js/ai-sdk-cost.svg)](https://www.npmjs.com/package/ai-sdk-cost)
+[![npm downloads](https://img.shields.io/npm/dm/ai-sdk-cost.svg)](https://www.npmjs.com/package/ai-sdk-cost)
+
+
 ## License
 
 MIT
