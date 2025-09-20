@@ -64,13 +64,28 @@ async function main() {
 
   litellmSpan.end();
 
+  // Example 3: Per-call model override (no pre-configured mapping needed!)
+  const dynamicSpan = telemetry.tracer.startSpan('ai.streamText.doStream');
+
+  dynamicSpan.setAttributes({
+    'gen_ai.system': 'custom-proxy',
+    'gen_ai.request.model': 'prod-deployment-xyz-123', // Unknown deployment name
+    'experimental_telemetry.metadata.modelName': 'gpt-4o', // Override the model name for pricing!
+    'gen_ai.usage.input_tokens': 1800,
+    'gen_ai.usage.output_tokens': 600,
+    'ai.response.finishReason': 'stop'
+  });
+
+  dynamicSpan.end();
+
   // Force flush and check output
   await telemetry.tracerProvider.forceFlush();
 
   console.log('\n✅ Model mapping example complete!');
   console.log('Check the logs above - deployment names should be mapped to actual models:');
-  console.log('  - "my-gpt4-deployment" → "gpt-4o"');
-  console.log('  - "litellm/smart-model" → "gpt-4o"');
+  console.log('  - "my-gpt4-deployment" → "gpt-4o" (via modelMapping config)');
+  console.log('  - "litellm/smart-model" → "gpt-4o" (via modelMapping config)');
+  console.log('  - "prod-deployment-xyz-123" → "gpt-4o" (via per-call metadata override)');
   console.log('\nThis ensures correct pricing even when using proxy services.');
 
   await telemetry.tracerProvider.shutdown();

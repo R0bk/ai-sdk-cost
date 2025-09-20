@@ -151,7 +151,10 @@ const pricing = getPackagedOpenRouterPricing();
 
 ### Using Proxy Services (Azure, LiteLLM, etc.)
 
-When using proxy services, deployment names often don't match actual model names. Use `modelMapping` to ensure accurate pricing:
+When using proxy services, deployment names often don't match actual model names. You have two options:
+
+#### Option 1: Global Model Mapping
+Configure mappings upfront for known deployments:
 
 ```ts
 initAiSdkCostTelemetry({
@@ -170,7 +173,24 @@ initAiSdkCostTelemetry({
 });
 ```
 
-Now when your proxy reports `model: "my-gpt4-deployment"`, costs will be calculated using `gpt-4o` pricing.
+#### Option 2: Per-Call Override
+Override the model name on individual calls without pre-configuration:
+
+```ts
+await streamText({
+  model: customProxy('prod-deployment-xyz-123'),
+  messages: [...],
+  experimental_telemetry: {
+    isEnabled: true,
+    metadata: {
+      modelName: 'gpt-4o', // Override for accurate pricing!
+      userId: 'user-123'
+    }
+  }
+});
+```
+
+Priority: Per-call `modelName` > `modelMapping` config > raw model name from provider.
 
 ### Provider-Specific Handling
 

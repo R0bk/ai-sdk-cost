@@ -328,6 +328,14 @@ export class AiSdkTokenExporter implements SpanExporter {
           if (!looksLikeAiSdkSpan(span)) continue;
           const attrs = (span.attributes ?? {}) as Attrs;
 
+          // Check for per-call model override first
+          const modelOverride = getAttr(attrs, [
+            'experimental_telemetry.metadata.modelName',
+            'experimental_telemetry.metadata.model_name',
+            'ai.metadata.modelName',
+            'ai.metadata.model_name'
+          ]) as string | undefined;
+
           const rawModel =
             (getAttr(attrs, [
               'gen_ai.request.model',
@@ -336,7 +344,8 @@ export class AiSdkTokenExporter implements SpanExporter {
               'ai.response.model'
             ]) as string | undefined) ?? 'unknown';
 
-          const model = this.options.modelMapping?.[rawModel] ?? rawModel;
+          // Priority: per-call override > model mapping > raw model
+          const model = modelOverride ?? this.options.modelMapping?.[rawModel] ?? rawModel;
 
           const provider = getAttr(attrs, ['gen_ai.system', 'ai.model.provider']);
 
