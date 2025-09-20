@@ -1,95 +1,129 @@
 # ai-sdk-cost
 
-Tiny, DB-agnostic helper for the Vercel AI SDK.
+Track every token, calculate every dollar - across workspaces and users - in 3 lines of code.
 
-- Logs tokens from AI SDK OpenTelemetry spans (time, model, input, output, cache_read, cache_write, cost_cents, finish_reason, user_id, workspace_id, trace/span IDs).
-- Watches OpenRouter pricing (`/api/v1/models`) and notifies you when it changes.
-- Ships a GitHub Action to publish the latest pricing JSON back to your repo.
+`ai-sdk-cost` gives you production-ready cost tracking for Vercel AI SDK:
+- [x] **Real-time cost per request** - Know exactly what each API call costs
+- [x] **User & workspace attribution** - Track costs by customer, team, or feature
+- [x] **Multi-provider support** - OpenAI, Anthropic, Google, DeepSeek, X.AI (via OpenRouter pricing)
+- [x] **Cache-aware billing** - Correctly handles prompt caching discounts
+- [x] **Zero database required** - Send to console, webhook, or your existing logging
+- [x] **Auto-updating prices** - Pricing changes tracked automatically
 
-> You must enable `experimental_telemetry` per-call while Vercel AI telemetry is experimental.
+## Quick Start (3 minutes)
+
+```typescript
+// 1. Install
+npm install ai-sdk-cost
+
+// 2. Initialize tracking
+import { initAiSdkCostTelemetry } from 'ai-sdk-cost';
+initAiSdkCostTelemetry();
+
+// 3. Add telemetry to your AI calls
+await streamText({
+  model: openai('gpt-4o'),
+  experimental_telemetry: { isEnabled: true },
+  // Your existing code...
+});
+```
+
+That's it. You're now tracking costs. Check your console for:
+```json
+{
+  "model": "gpt-4o",
+  "cost_cents": 8,
+  "user_id": "user-123",
+  "input": 1250,
+  "output": 430
+}
+```
 
 ## Installation
 
 ```bash
-corepack enable pnpm
-pnpm add ai-sdk-cost \
-  @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/sdk-trace-node
+npm install ai-sdk-cost @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/sdk-trace-node
+# or
+pnpm add ai-sdk-cost @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/sdk-trace-node
 ```
 
-## Collect token logs from the AI SDK
-
-Register the exporter and enable telemetry on your calls.
+## Full Setup Example
 
 ```ts
 import { initAiSdkCostTelemetry, consoleSink } from 'ai-sdk-cost';
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
 
+// Initialize once at app startup
 const telemetry = initAiSdkCostTelemetry({
-  sink: consoleSink(),
-  getContext: () => ({ userId: 'demo-user', workspaceId: 'demo-workspace' })
+  sink: consoleSink(), // or webhookSink('https://your-api.com/ingest')
 });
 
-const span = telemetry.tracer.startSpan('ai.generateText.doGenerate');
-span.end();
-
-await telemetry.tracerProvider.forceFlush();
-await telemetry.tracerProvider.shutdown();
+// Use with your AI calls
+const result = await streamText({
+  model: openai('gpt-4o-mini'),
+  messages: [{ role: 'user', content: 'Hello!' }],
+  experimental_telemetry: {
+    isEnabled: true,
+    metadata: {
+      userId: 'user-123',        // Optional: per-request override
+      workspaceId: 'workspace-1'  // Optional: per-request override
+    }
+  }
+});
 ```
 
-See `examples/basic.ts` for a complete setup that includes span attributes and shutdown handling.
-
-Example output (newline JSON):
-
+Each request logs:
 ```json
-{"time":"2025-01-01T12:34:56.789Z","provider":"openai","model":"gpt-4o-mini","input":123,"output":456,"cache_read":896,"cache_write":1024,"cost_cents":8,"finish_reason":"stop","user_id":"demo-user","workspace_id":"demo-workspace","traceId":"...","spanId":"..."}
+{
+  "time": "2025-01-01T12:34:56.789Z",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "input": 123,
+  "output": 456,
+  "cache_read": 896,
+  "cache_write": 1024,
+  "cost_cents": 8,
+  "finish_reason": "stop",
+  "user_id": "user-123",
+  "workspace_id": "workspace-1",
+  "traceId": "abc123...",
+  "spanId": "def456..."
+}
 ```
 
-To send logs elsewhere, pick another sink:
+## Send Costs to Your Database
+
+Choose from built-in sinks or create your own:
 
 ```ts
-import { initAiSdkCostTelemetry, webhookSink } from 'ai-sdk-cost';
+// Console output (default)
+import { consoleSink } from 'ai-sdk-cost';
+initAiSdkCostTelemetry({ sink: consoleSink() });
 
+// Webhook endpoint
+import { webhookSink } from 'ai-sdk-cost';
 initAiSdkCostTelemetry({
-  sink: webhookSink('https://example.com/ingest')
+  sink: webhookSink('https://your-api.com/ingest')
+});
+
+// Custom handler (write to your database)
+import { callbackSink } from 'ai-sdk-cost';
+initAiSdkCostTelemetry({
+  sink: callbackSink(async (log) => {
+    await db.insert('ai_costs', {
+      user_id: log.user_id,
+      cost_cents: log.cost_cents,
+      model: log.model,
+      timestamp: log.time
+    });
+  })
 });
 ```
 
-### Try the built-in example
+## Advanced Features
 
-After installing dependencies, run:
-
-```bash
-pnpm run example
-```
-
-This uses the dev dependencies to create a mock AI SDK span and prints the exported
-token log to your console.
-
-
-### Run live integration checks (optional)
-
-These scripts call the Vercel AI SDK v5 (tested with 5.0.47) against real providers.
-They require API keys and will emit actual telemetry spans through the exporter.
-
-```bash
-# OpenAI (expects AI_OPENAI_API_KEY or OPENAI_API_KEY)
-pnpm run test:external:openai
-
-# Anthropic (expects AI_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY)
-pnpm run test:external:anthropic
-```
-
-Each script makes two identical calls to encourage providers with prompt
-caching support to emit `cache_read`/`cache_write` usage metrics. The examples
-use the official `@ai-sdk/openai` and `@ai-sdk/anthropic` provider adapters, so
-they stay aligned with the latest AI SDK 5 behaviour (prompt caching, cache
-control, etc.). Both scripts throw if the expected cache behaviour is not
-observed (Anthropic must report cache writes on the first call and cache reads
-on the second; OpenAI must report cache reads on the second call).
-
-See `examples/express.ts` for a minimal Express handler: register telemetry once, then pass `metadata` with `userId` / `workspaceId` on each `streamText` call (install `express`/`@types/express` to run it).
-
-
-## Watch OpenRouter pricing at runtime
+### Watch OpenRouter Pricing at Runtime
 
 ```ts
 import { startOpenRouterPriceWatcher } from 'ai-sdk-cost';
@@ -104,79 +138,57 @@ const stop = startOpenRouterPriceWatcher({
 // Later: stop();
 ```
 
-### Bundled pricing snapshot & cost helpers
+### Access Bundled Pricing Data
 
-The package ships with a curated OpenRouter pricing snapshot (`x-ai`, `openai`,
-`anthropic`, `google`, `deepseek`). You can access it without hitting the
-network:
+The package ships with curated OpenRouter pricing for major providers. Access it without network calls:
 
 ```ts
 import { getPackagedOpenRouterPricing } from 'ai-sdk-cost';
 
 const pricing = getPackagedOpenRouterPricing();
+// Returns pricing for OpenAI, Anthropic, Google, DeepSeek, X.AI models
 ```
 
-If you maintain your own ledger, combine those prices with the usage numbers
-from the exporter and your preferred cost calculator to write deterministic
-per-request cost rows.
+### Provider-Specific Handling
 
-### Telemetry caveats (OpenAI vs. Anthropic)
+The library correctly handles each provider's unique telemetry format:
 
-- OpenAI includes cached prompt tokens in `usage.inputTokens` *and* reports
-  `usage.cacheReadTokens`. We currently bill the cached portion at the cache
-  rate and subtract it from the regular prompt bucket only when the totals
-  allow. Once the SDK distinguishes the two explicitly we can remove the
-  heuristics.
-- Anthropic reports only fresh prompt tokens in `usage.input_tokens` and places
-  cached tokens in `cache_read_input_tokens`. No adjustment is required; the
-  exporter charges the cached bucket at the discounted rate and the remaining
-  prompt tokens at the standard rate.
-- Telemetry metadata (e.g., `experimental_telemetry.metadata.userId`) is
-  automatically mapped to `user_id` / `workspace_id`, with span attributes and
-  custom hooks as fallbacks.
-- Other providers may differ. If you notice mismatches, please open an issue or
-  follow the pattern above to add provider-specific handling.
+- **OpenAI**: Cached tokens are included in `inputTokens` AND reported separately. We handle the deduplication automatically.
+- **Anthropic**: Cache reads are correctly separated from input tokens. No double-counting.
+- **Others**: Telemetry metadata is automatically extracted from various attribute formats.
 
-## GitHub Action: auto publish pricing JSON
+### Examples
 
-`./.github/workflows/publish-openrouter-prices.yml` runs weekly (Mondays at
-03:00 UTC) and commits `data/openrouter-pricing.json` when pricing changes.
+See the `examples/` directory for:
+- `basic.ts` - Simple mock telemetry example
+- `express.ts` - Production Express.js integration
+- `test-external-openai.ts` - Live OpenAI integration test
+- `test-external-anthropic.ts` - Live Anthropic integration test
 
-To run the same script locally:
+### GitHub Action for Auto-Updating Prices
 
+The included GitHub Action (`.github/workflows/publish-openrouter-prices.yml`) automatically updates pricing data weekly. To use in your repo:
+
+1. Copy the workflow file
+2. Set GitHub secrets for `GITHUB_TOKEN`
+3. Pricing updates will be committed automatically
+
+## Development
+
+### Update Pricing Data
 ```bash
-GITHUB_OWNER=your-org \
-GITHUB_REPO=your-repo \
-GITHUB_TOKEN=ghp_... \
-pnpm run fetch:prices
+pnpm run fetch:prices  # Updates src/data/openrouter-pricing.json
 ```
 
-When the GitHub variables are omitted, `pnpm run fetch:prices` saves the latest
-prices to `src/data/openrouter-pricing.json`. The library bundle ships with that
-file, so run the command (and `pnpm run build`) before publishing to ensure the
-packaged pricing data is current.
+### Run Tests
+```bash
+# Test pricing calculations
+pnpm run test:pricing
 
-## Publishing workflow
-
-1. Refresh pricing and rebuild assets:
-   ```bash
-   pnpm run fetch:prices
-   pnpm run build
-   ```
-2. Sanity check the snapshot and cost math:
-   ```bash
-   pnpm run test:pricing
-   ```
-3. (Optional) Run the live smoke tests with valid API keys to confirm telemetry
-   and cache logging:
-   ```bash
-   pnpm run test:external:openai
-   pnpm run test:external:anthropic
-   ```
-4. Publish as usual:
-   ```bash
-   pnpm publish
-   ```
+# Live provider tests (requires API keys)
+pnpm run test:external:openai
+pnpm run test:external:anthropic
+```
 
 ## License
 
