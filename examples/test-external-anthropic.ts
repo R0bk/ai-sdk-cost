@@ -1,8 +1,11 @@
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { streamText, type ModelMessage } from 'ai';
+import { initAiSdkCostTelemetry, consoleSink } from '../src';
+import { ModelMessage, streamText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { AiSdkTokenExporter, consoleSink } from '../src';
+
+const telemetry = initAiSdkCostTelemetry({
+  sink: consoleSink(),
+  getContext: () => ({ userId: 'demo-user-anthropic', workspaceId: 'demo-workspace-anthropic' })
+});
 
 async function runAnthropic(prompt: string) {
   const messages: ModelMessage[] = [
@@ -41,24 +44,9 @@ async function main() {
     process.exit(1);
   }
 
-  const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(
-    new SimpleSpanProcessor(
-      new AiSdkTokenExporter(consoleSink(), {
-        getContext() {
-          return {
-            userId: 'demo-user-anthropic',
-            workspaceId: 'demo-workspace-anthropic'
-          };
-        }
-      })
-    )
-  );
-  provider.register();
-
   try {
     const paragraph = 'Anthropic cache control lets us reuse large safety policies, structured response schemas, and other long-lived context while paying only for deltas.';
-    const longPrompt = Array.from({ length: 60 }, (_, idx) => `Clause ${idx + 1}: ${paragraph}`).join('\n');
+    const longPrompt = Array.from({ length: 80 }, (_, idx) => `Clause ${idx + 1}: ${paragraph}`).join('\n');
     const cacheBuster = `cache-buster-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const promptWithBuster = `${longPrompt}\nCache-Buster: ${cacheBuster}`;
 
@@ -93,8 +81,8 @@ async function main() {
     }
     console.log('Model output:', cool.text);
   } finally {
-    await provider.forceFlush();
-    await provider.shutdown();
+    await telemetry.tracerProvider.forceFlush();
+    await telemetry.tracerProvider.shutdown();
   }
 }
 

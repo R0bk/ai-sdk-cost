@@ -21,41 +21,21 @@ pnpm add ai-sdk-cost \
 Register the exporter and enable telemetry on your calls.
 
 ```ts
-// instrumentation.ts
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { AiSdkTokenExporter, consoleSink } from 'ai-sdk-cost';
+import { initAiSdkCostTelemetry, consoleSink } from 'ai-sdk-cost';
 
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(
-  new SimpleSpanProcessor(
-    new AiSdkTokenExporter(consoleSink(), {
-      userIdAttributes: ['ai.user.id', 'gen_ai.user.id'],
-      workspaceIdAttributes: ['ai.workspace.id'],
-      getContext(span, attrs) {
-        return {
-          userId: (attrs['app.user.id'] as string | undefined) ?? undefined,
-          workspaceId: (attrs['app.workspace.id'] as string | undefined) ?? undefined
-        };
-      }
-    })
-  )
-);
-provider.register();
-
-// The optional second argument to AiSdkTokenExporter lets you map span attributes
-// (or custom logic via getContext) into `user_id` / `workspace_id` fields on the
-// exported logs.
-
-// later in your AI call
-import { generateText } from 'ai';
-
-const response = await generateText({
-  model: 'openai:gpt-4o-mini',
-  prompt: 'Hello world',
-  experimental_telemetry: { isEnabled: true }
+const telemetry = initAiSdkCostTelemetry({
+  sink: consoleSink(),
+  getContext: () => ({ userId: 'demo-user', workspaceId: 'demo-workspace' })
 });
+
+const span = telemetry.tracer.startSpan('ai.generateText.doGenerate');
+span.end();
+
+await telemetry.tracerProvider.forceFlush();
+await telemetry.tracerProvider.shutdown();
 ```
+
+See `examples/basic.ts` for a complete setup that includes span attributes and shutdown handling.
 
 Example output (newline JSON):
 
@@ -66,11 +46,11 @@ Example output (newline JSON):
 To send logs elsewhere, pick another sink:
 
 ```ts
-import { webhookSink } from 'ai-sdk-cost';
+import { initAiSdkCostTelemetry, webhookSink } from 'ai-sdk-cost';
 
-provider.addSpanProcessor(
-  new SimpleSpanProcessor(new AiSdkTokenExporter(webhookSink('https://example.com/ingest')))
-);
+initAiSdkCostTelemetry({
+  sink: webhookSink('https://example.com/ingest')
+});
 ```
 
 ### Try the built-in example
@@ -105,6 +85,9 @@ they stay aligned with the latest AI SDK 5 behaviour (prompt caching, cache
 control, etc.). Both scripts throw if the expected cache behaviour is not
 observed (Anthropic must report cache writes on the first call and cache reads
 on the second; OpenAI must report cache reads on the second call).
+
+See `examples/express.ts` for a minimal Express handler: register telemetry once, then pass `metadata` with `userId` / `workspaceId` on each `streamText` call (install `express`/`@types/express` to run it).
+
 
 ## Watch OpenRouter pricing at runtime
 
@@ -148,6 +131,9 @@ per-request cost rows.
   cached tokens in `cache_read_input_tokens`. No adjustment is required; the
   exporter charges the cached bucket at the discounted rate and the remaining
   prompt tokens at the standard rate.
+- Telemetry metadata (e.g., `experimental_telemetry.metadata.userId`) is
+  automatically mapped to `user_id` / `workspace_id`, with span attributes and
+  custom hooks as fallbacks.
 - Other providers may differ. If you notice mismatches, please open an issue or
   follow the pattern above to add provider-specific handling.
 

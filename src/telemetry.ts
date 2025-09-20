@@ -1,3 +1,4 @@
+import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
 import type { PriceEntry, TokenLog, TokenLogSink } from './types';
@@ -24,6 +25,9 @@ const AI_SPAN_MATCHERS = [
 ];
 
 const DEFAULT_USER_ID_ATTRS = [
+  'experimental_telemetry.metadata.userId',
+  'experimental_telemetry.metadata.user_id',
+  'experimental_telemetry.functionId',
   'ai.user.id',
   'ai.userId',
   'gen_ai.user.id',
@@ -33,11 +37,16 @@ const DEFAULT_USER_ID_ATTRS = [
 ];
 
 const DEFAULT_WORKSPACE_ID_ATTRS = [
+  'experimental_telemetry.metadata.workspaceId',
+  'experimental_telemetry.metadata.workspace_id',
   'ai.workspace.id',
   'ai.space.id',
   'workspace.id',
   'space.id'
 ];
+
+export const USER_CONTEXT_KEY = Symbol('ai-sdk-cost-user');
+export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
 
 function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
   const name = span.name ?? '';
@@ -47,6 +56,38 @@ function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
 function getAttr(attrs: Attrs, keys: string[]): unknown {
   for (const key of keys) {
     if (key in attrs) return (attrs as Record<string, unknown>)[key];
+    if (key.includes('.')) {
+      const [root, ...rest] = key.split('.');
+      if (!(root in attrs)) continue;
+      let value: unknown = (attrs as Record<string, unknown>)[root];
+      if (typeof value === 'string') {
+        try {
+          value = JSON.parse(value);
+        } catch {
+          value = undefined;
+        }
+      }
+      let valid = value !== undefined && value !== null;
+      for (const part of rest) {
+        if (!valid) break;
+        if (typeof value === 'string') {
+          try {
+            value = JSON.parse(value);
+          } catch {
+            value = undefined;
+            valid = false;
+            break;
+          }
+        }
+        if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+          value = (value as Record<string, unknown>)[part];
+        } else {
+          valid = false;
+          break;
+        }
+      }
+      if (valid) return value;
+    }
   }
   return undefined;
 }
@@ -120,21 +161,24 @@ function resolveContext(
   attrs: Attrs,
   options: ExporterOptions
 ): { userId?: string | null; workspaceId?: string | null } {
-  const directContext = options.getContext?.(span, attrs);
-  if (directContext) {
-    return {
-      userId: directContext.userId ?? null,
-      workspaceId: directContext.workspaceId ?? null
-    };
-  }
-
   const userAttrKeys = options.userIdAttributes ?? DEFAULT_USER_ID_ATTRS;
   const workspaceAttrKeys = options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ID_ATTRS;
 
-  const userId = (getAttr(attrs, userAttrKeys) ?? null) as string | null;
-  const workspaceId = (getAttr(attrs, workspaceAttrKeys) ?? null) as string | null;
+  const direct = options.getContext?.(span, attrs) ?? undefined;
 
-  return { userId, workspaceId };
+  let userId: string | null | undefined = direct?.userId ?? (getAttr(attrs, userAttrKeys) as string | null | undefined);
+  if (userId == null) {
+    const ctxUser = context.active().getValue(USER_CONTEXT_KEY) as string | null | undefined;
+    if (ctxUser != null) userId = ctxUser;
+  }
+
+  let workspaceId: string | null | undefined = direct?.workspaceId ?? (getAttr(attrs, workspaceAttrKeys) as string | null | undefined);
+  if (workspaceId == null) {
+    const ctxWorkspace = context.active().getValue(WORKSPACE_CONTEXT_KEY) as string | null | undefined;
+    if (ctxWorkspace != null) workspaceId = ctxWorkspace;
+  }
+
+  return { userId: userId ?? null, workspaceId: workspaceId ?? null };
 }
 
 function computeCostFromUsage(

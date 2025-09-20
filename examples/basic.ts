@@ -1,38 +1,23 @@
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { AiSdkTokenExporter, consoleSink } from '../src';
+import { initAiSdkCostTelemetry, consoleSink } from '../src';
 
 async function main() {
-  const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(
-    new SimpleSpanProcessor(
-      new AiSdkTokenExporter(consoleSink(), {
-        getContext() {
-          return { userId: 'demo-user', workspaceId: 'demo-workspace' };
-        }
-      })
-    )
-  );
-  provider.register();
+  const telemetry = initAiSdkCostTelemetry({
+    sink: consoleSink(),
+    getContext: () => ({ userId: 'demo-user', workspaceId: 'demo-workspace' })
+  });
 
-  const tracer = provider.getTracer('ai-sdk-cost-example');
-
-  const span = tracer.startSpan('ai.generateText.doGenerate', undefined, undefined);
+  const tracer = telemetry.tracer;
+  const span = tracer.startSpan('ai.generateText.doGenerate');
   span.setAttributes({
     'gen_ai.system': 'openai',
     'gen_ai.request.model': 'gpt-4o-mini',
     'gen_ai.usage.input_tokens': 128,
-    'gen_ai.usage.output_tokens': 256,
-    'ai.response.providerMetadata': JSON.stringify({
-      usage: {
-        prompt_tokens_details: { cached_tokens: 32 }
-      }
-    })
+    'gen_ai.usage.output_tokens': 256
   });
   span.end();
 
-  await provider.forceFlush();
-  await provider.shutdown();
+  await telemetry.tracerProvider.forceFlush();
+  await telemetry.tracerProvider.shutdown();
 }
 
 main().catch((err) => {
