@@ -56,8 +56,15 @@ function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
 }
 
 function getAttr(attrs: Attrs, keys: string[]): unknown {
+  if (!attrs) return undefined;
+
   for (const key of keys) {
-    if (key in attrs) return (attrs as Record<string, unknown>)[key];
+    // First try direct attribute lookup (OpenTelemetry stores dotted keys as strings)
+    if (key in attrs) {
+      return (attrs as Record<string, unknown>)[key];
+    }
+
+    // Then try nested object traversal (for JSON parsed values)
     if (key.includes('.')) {
       const [root, ...rest] = key.split('.');
       if (!(root in attrs)) continue;
@@ -66,29 +73,24 @@ function getAttr(attrs: Attrs, keys: string[]): unknown {
         try {
           value = JSON.parse(value);
         } catch {
-          value = undefined;
+          // If JSON parse fails, the string might not be JSON
+          // Continue to check if it's a nested object
         }
       }
-      let valid = value !== undefined && value !== null;
-      for (const part of rest) {
-        if (!valid) break;
-        if (typeof value === 'string') {
-          try {
-            value = JSON.parse(value);
-          } catch {
-            value = undefined;
-            valid = false;
+      // Only traverse if we have an object
+      if (value && typeof value === 'object') {
+        let current = value as Record<string, unknown>;
+        let found = true;
+        for (const part of rest) {
+          if (part in current) {
+            current = current[part] as Record<string, unknown>;
+          } else {
+            found = false;
             break;
           }
         }
-        if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
-          value = (value as Record<string, unknown>)[part];
-        } else {
-          valid = false;
-          break;
-        }
+        if (found) return current;
       }
-      if (valid) return value;
     }
   }
   return undefined;
@@ -166,15 +168,29 @@ function resolveContext(
   const userAttrKeys = options.userIdAttributes ?? DEFAULT_USER_ID_ATTRS;
   const workspaceAttrKeys = options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ID_ATTRS;
 
-  const direct = options.getContext?.(span, attrs) ?? undefined;
+  // Priority order:
+  // 1. Per-call attributes (from experimental_telemetry.metadata)
+  // 2. Global context from getContext callback
+  // 3. OpenTelemetry context values
 
-  let userId: string | null | undefined = direct?.userId ?? (getAttr(attrs, userAttrKeys) as string | null | undefined);
+  // Check attributes first
+  let userId: string | null | undefined = getAttr(attrs, userAttrKeys) as string | null | undefined;
+  let workspaceId: string | null | undefined = getAttr(attrs, workspaceAttrKeys) as string | null | undefined;
+
+  // If not found in attributes, try getContext callback
+  const direct = options.getContext?.(span, attrs) ?? undefined;
+  if (userId == null && direct?.userId != null) {
+    userId = direct.userId;
+  }
+  if (workspaceId == null && direct?.workspaceId != null) {
+    workspaceId = direct.workspaceId;
+  }
+
+  // Finally, check OpenTelemetry context
   if (userId == null) {
     const ctxUser = context.active().getValue(USER_CONTEXT_KEY) as string | null | undefined;
     if (ctxUser != null) userId = ctxUser;
   }
-
-  let workspaceId: string | null | undefined = direct?.workspaceId ?? (getAttr(attrs, workspaceAttrKeys) as string | null | undefined);
   if (workspaceId == null) {
     const ctxWorkspace = context.active().getValue(WORKSPACE_CONTEXT_KEY) as string | null | undefined;
     if (ctxWorkspace != null) workspaceId = ctxWorkspace;

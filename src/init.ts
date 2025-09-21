@@ -42,8 +42,20 @@ export type TelemetryInitResult = {
   spanProcessor: SpanProcessor;
 };
 
-const DEFAULT_USER_ATTRS = ['app.user.id', 'ai.user.id', 'user.id'];
-const DEFAULT_WORKSPACE_ATTRS = ['app.workspace.id', 'ai.workspace.id', 'workspace.id'];
+const DEFAULT_USER_ATTRS = [
+  'experimental_telemetry.metadata.userId',
+  'experimental_telemetry.metadata.user_id',
+  'app.user.id',
+  'ai.user.id',
+  'user.id'
+];
+const DEFAULT_WORKSPACE_ATTRS = [
+  'experimental_telemetry.metadata.workspaceId',
+  'experimental_telemetry.metadata.workspace_id',
+  'app.workspace.id',
+  'ai.workspace.id',
+  'workspace.id'
+];
 
 function buildExporterOptions(options: TelemetryInitOptions): ExporterOptions {
   return {

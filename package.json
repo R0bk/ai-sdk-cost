@@ -1,6 +1,6 @@
 {
   "name": "ai-sdk-cost",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "DB-agnostic cost telemetry helper for Vercel AI SDK with OpenRouter pricing watcher",
   "license": "MIT",
   "repository": {
@@ -30,6 +30,8 @@
     "test:external:openai": "tsx examples/openai-example.ts",
     "test:external:anthropic": "tsx examples/anthropic-example.ts",
     "test:external:google": "tsx examples/google-example.ts",
+    "test:user-override": "tsx examples/user-workspace-override.ts",
+    "test:callback": "tsx examples/user-workspace-callback-test.ts",
     "test:pricing": "tsx scripts/verify-pricing.ts"
   },
   "dependencies": {
