@@ -9,6 +9,13 @@ import { openai } from '@ai-sdk/openai';
  * without pre-configuration.
  */
 
+// Helper to consume stream to ensure telemetry span completes
+async function consumeStream(result: Awaited<ReturnType<typeof streamText>>) {
+  for await (const _ of result.textStream) {
+    // Just consume the stream
+  }
+}
+
 async function main() {
   // Initialize with global defaults
   const telemetry = initAiSdkCostTelemetry({
@@ -23,7 +30,7 @@ async function main() {
 
   // Call 1: Uses global defaults
   console.log('Call 1 - Using global defaults:');
-  await streamText({
+  const result1 = await streamText({
     model: openai('gpt-4o-mini'),
     messages: [{ role: 'user', content: 'Say hello in 3 words' }],
     experimental_telemetry: {
@@ -31,12 +38,12 @@ async function main() {
       // No metadata - will use defaults
     }
   });
-
+  await consumeStream(result1);
   await telemetry.tracerProvider.forceFlush();
 
   // Call 2: Override userId only
   console.log('\nCall 2 - Override userId only:');
-  await streamText({
+  const result2 = await streamText({
     model: openai('gpt-4o-mini'),
     messages: [{ role: 'user', content: 'Say goodbye in 3 words' }],
     experimental_telemetry: {
@@ -47,12 +54,12 @@ async function main() {
       }
     }
   });
-
+  await consumeStream(result2);
   await telemetry.tracerProvider.forceFlush();
 
   // Call 3: Override both userId and workspaceId
   console.log('\nCall 3 - Override both userId and workspaceId:');
-  await streamText({
+  const result3 = await streamText({
     model: openai('gpt-4o-mini'),
     messages: [{ role: 'user', content: 'Say thanks in 3 words' }],
     experimental_telemetry: {
@@ -63,12 +70,12 @@ async function main() {
       }
     }
   });
-
+  await consumeStream(result3);
   await telemetry.tracerProvider.forceFlush();
 
   // Call 4: Test alternative attribute names (user_id, workspace_id)
   console.log('\nCall 4 - Alternative attribute names (user_id, workspace_id):');
-  await streamText({
+  const result4 = await streamText({
     model: openai('gpt-4o-mini'),
     messages: [{ role: 'user', content: 'Count to three' }],
     experimental_telemetry: {
@@ -79,7 +86,7 @@ async function main() {
       }
     }
   });
-
+  await consumeStream(result4);
   await telemetry.tracerProvider.forceFlush();
 
   console.log('\n✅ User/Workspace override test complete!');

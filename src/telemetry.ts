@@ -27,6 +27,8 @@ const AI_SPAN_MATCHERS = [
 ];
 
 const DEFAULT_USER_ID_ATTRS = [
+  'ai.telemetry.metadata.userId',
+  'ai.telemetry.metadata.user_id',
   'experimental_telemetry.metadata.userId',
   'experimental_telemetry.metadata.user_id',
   'experimental_telemetry.functionId',
@@ -39,6 +41,8 @@ const DEFAULT_USER_ID_ATTRS = [
 ];
 
 const DEFAULT_WORKSPACE_ID_ATTRS = [
+  'ai.telemetry.metadata.workspaceId',
+  'ai.telemetry.metadata.workspace_id',
   'experimental_telemetry.metadata.workspaceId',
   'experimental_telemetry.metadata.workspace_id',
   'ai.workspace.id',
@@ -347,6 +351,8 @@ export class AiSdkTokenExporter implements SpanExporter {
 
           // Check for per-call model override first
           const modelOverride = getAttr(attrs, [
+            'ai.telemetry.metadata.modelName',
+            'ai.telemetry.metadata.model_name',
             'experimental_telemetry.metadata.modelName',
             'experimental_telemetry.metadata.model_name',
             'ai.metadata.modelName',
