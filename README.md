@@ -205,6 +205,30 @@ initAiSdkCostTelemetry({
 
 With `includeAttributes: true`, logs will include a full `attributes` field containing all OpenTelemetry span attributes. This is useful for debugging but should be disabled in production to reduce log size.
 
+### Advanced: Using with Existing OpenTelemetry Setup
+
+If you already have OpenTelemetry configured, you can integrate ai-sdk-cost with your existing setup:
+
+```ts
+import { AiSdkTokenExporter, consoleSink } from 'ai-sdk-cost';
+import { BatchSpanProcessor, NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+
+// Create the exporter
+const aiCostExporter = new AiSdkTokenExporter(consoleSink());
+
+// Configure your provider with multiple exporters
+const provider = new NodeTracerProvider({
+  spanProcessors: [
+    new BatchSpanProcessor(aiCostExporter),  // AI cost tracking
+    new BatchSpanProcessor(yourOtherExporter) // Your existing telemetry
+  ]
+});
+
+provider.register();
+```
+
+Note: Due to OpenTelemetry v2 changes, you cannot pass an existing provider to `initAiSdkCostTelemetry`. You must configure the provider with `AiSdkTokenExporter` when creating it.
+
 ### Provider-Specific Handling
 
 The library correctly handles each provider's unique telemetry format:

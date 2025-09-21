@@ -23,7 +23,11 @@ export type TelemetryInitOptions = {
   includeAttributes?: boolean;
   /** Supply your own span processor (defaults to BatchSpanProcessor). */
   spanProcessor?: SpanProcessor;
-  /** Reuse an existing tracer provider. */
+  /**
+   * Reuse an existing tracer provider.
+   * Note: In OpenTelemetry v2, you must configure the provider with AiSdkTokenExporter yourself.
+   * This option is for advanced users who need unified tracing across multiple libraries.
+   */
   tracerProvider?: NodeTracerProvider;
   /** Automatically register the provider globally (default true). */
   autoRegister?: boolean;
@@ -59,19 +63,19 @@ export function initAiSdkCostTelemetry(options: TelemetryInitOptions = {}): Tele
   const spanProcessor = options.spanProcessor ?? new BatchSpanProcessor(exporter);
 
   let tracerProvider = options.tracerProvider;
-  let createdProvider = false;
+  let createdOurOwnProvider = false;
 
   if (!tracerProvider) {
+    // Create a new provider with our exporter
     tracerProvider = new NodeTracerProvider({
       spanProcessors: [spanProcessor]
     });
-    createdProvider = true;
-  } else {
-    // addSpanProcessor is deprecated but still the only public API when reusing a provider.
-    tracerProvider.addSpanProcessor(spanProcessor);
+    createdOurOwnProvider = true;
   }
+  // Note: If user passed their own provider, they must have already configured it
+  // with our exporter. We can't add processors to existing providers in v2.
 
-  if (options.autoRegister !== false) {
+  if (options.autoRegister !== false && createdOurOwnProvider) {
     tracerProvider.register();
   }
 
