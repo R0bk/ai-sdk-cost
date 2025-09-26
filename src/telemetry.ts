@@ -1,10 +1,13 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
+import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping, NumberLike } from './types';
+import { toFiniteNumber, getAttr } from './parser';
 import { packagedOpenRouterPricing } from './openrouter';
+import { normalizeProviderTokens } from './providers';
+import { CallLlmSpanAttributes, isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
 
-type Attrs = Record<string, unknown>;
+export type Attrs = TelemetryAttributeBag;
 
 export type ExporterContextResolver = (span: ReadableSpan, attrs: Attrs) => {
   userId?: string | null;
@@ -26,30 +29,9 @@ const AI_SPAN_MATCHERS = [
   'ai.streamObject.doStream'
 ];
 
-const DEFAULT_USER_ID_ATTRS = [
-  'ai.telemetry.metadata.userId',
-  'ai.telemetry.metadata.user_id',
-  'experimental_telemetry.metadata.userId',
-  'experimental_telemetry.metadata.user_id',
-  'experimental_telemetry.functionId',
-  'ai.user.id',
-  'ai.userId',
-  'gen_ai.user.id',
-  'gen_ai.userId',
-  'user.id',
-  'userId'
-];
+const DEFAULT_USER_ID_ATTRS = ['ai.telemetry.metadata.userId', 'ai.telemetry.metadata.user_id'];
 
-const DEFAULT_WORKSPACE_ID_ATTRS = [
-  'ai.telemetry.metadata.workspaceId',
-  'ai.telemetry.metadata.workspace_id',
-  'experimental_telemetry.metadata.workspaceId',
-  'experimental_telemetry.metadata.workspace_id',
-  'ai.workspace.id',
-  'ai.space.id',
-  'workspace.id',
-  'space.id'
-];
+const DEFAULT_WORKSPACE_ID_ATTRS = ['ai.telemetry.metadata.workspaceId', 'ai.telemetry.metadata.workspace_id'];
 
 export const USER_CONTEXT_KEY = Symbol('ai-sdk-cost-user');
 export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
@@ -57,90 +39,6 @@ export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
 function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
   const name = span.name ?? '';
   return AI_SPAN_MATCHERS.some((matcher) => name.includes(matcher));
-}
-
-function getAttr(attrs: Attrs, keys: string[]): unknown {
-  if (!attrs) return undefined;
-
-  for (const key of keys) {
-    // First try direct attribute lookup (OpenTelemetry stores dotted keys as strings)
-    if (key in attrs) {
-      return (attrs as Record<string, unknown>)[key];
-    }
-
-    // Then try nested object traversal (for JSON parsed values)
-    if (key.includes('.')) {
-      const [root, ...rest] = key.split('.');
-      if (!(root in attrs)) continue;
-      let value: unknown = (attrs as Record<string, unknown>)[root];
-      if (typeof value === 'string') {
-        try {
-          value = JSON.parse(value);
-        } catch {
-          // If JSON parse fails, the string might not be JSON
-          // Continue to check if it's a nested object
-        }
-      }
-      // Only traverse if we have an object
-      if (value && typeof value === 'object') {
-        let current = value as Record<string, unknown>;
-        let found = true;
-        for (const part of rest) {
-          if (part in current) {
-            current = current[part] as Record<string, unknown>;
-          } else {
-            found = false;
-            break;
-          }
-        }
-        if (found) return current;
-      }
-    }
-  }
-  return undefined;
-}
-
-function parseMaybeJSON(value: unknown): unknown {
-  if (value == null) return undefined;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return undefined;
-    }
-  }
-  if (typeof value === 'object') return value;
-  return undefined;
-}
-
-type NumberLike = number | string | null | undefined;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function toFiniteNumber(value: NumberLike): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num : undefined;
-}
-
-function pickNumber(record: Record<string, unknown>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    if (!(key in record)) continue;
-    const candidate = toFiniteNumber(record[key] as NumberLike);
-    if (candidate !== undefined) return candidate;
-  }
-  return undefined;
-}
-
-function pickRecord(record: Record<string, unknown>, keys: string[]): Record<string, unknown> | undefined {
-  for (const key of keys) {
-    if (!(key in record)) continue;
-    const candidate = record[key];
-    if (isRecord(candidate)) return candidate;
-  }
-  return undefined;
 }
 
 function lookupPrice(provider: string | null | undefined, model: string): PriceEntry | null {
@@ -173,7 +71,7 @@ function resolveContext(
   const workspaceAttrKeys = options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ID_ATTRS;
 
   // Priority order:
-  // 1. Per-call attributes (from experimental_telemetry.metadata)
+  // 1. Per-call attributes (from metadata)
   // 2. Global context from getContext callback
   // 3. OpenTelemetry context values
 
@@ -226,9 +124,8 @@ function computeCostFromUsage(
   return { costCents };
 }
 
-function extractCacheTokens(attrs: Attrs): { cacheRead: number; cacheWrite: number } {
+function extractCacheTokens(attrs: CallLlmSpanAttributes): { cacheRead: number } {
   const readValues = new Map<string, number>();
-  const writeValues = new Map<string, number>();
 
   const setMax = (map: Map<string, number>, key: string, value: NumberLike) => {
     const num = toFiniteNumber(value);
@@ -239,101 +136,19 @@ function extractCacheTokens(attrs: Attrs): { cacheRead: number; cacheWrite: numb
     }
   };
 
-  const attrCacheIn = getAttr(attrs, [
-    'ai.usage.cachedInputTokens',
-    'ai.usage.cachedTokens',
-    'gen_ai.usage.cached_input_tokens',
-    'gen_ai.usage.cached_tokens'
-  ]);
-  setMax(readValues, 'input', attrCacheIn as NumberLike);
+  const attrCacheIn = attrs['ai.usage.cachedInputTokens'] as number | undefined;
 
-  const attrCacheOut = getAttr(attrs, [
-    'ai.usage.cachedOutputTokens',
-    'gen_ai.usage.cached_output_tokens'
-  ]);
-  setMax(readValues, 'output', attrCacheOut as NumberLike);
+  setMax(readValues, 'input', attrCacheIn);
 
-  const providerMeta = parseMaybeJSON(
-    getAttr(attrs, ['ai.response.providerMetadata', 'gen_ai.response.provider_metadata'])
-  );
+  const cacheRead = Array.from(readValues.entries()).reduce((sum, [_, value]) => sum + value, 0);
 
-  const usageCandidates: Record<string, unknown>[] = [];
-  const telemetryUsage = parseMaybeJSON(getAttr(attrs, ['ai.usage.details']));
-  if (isRecord(telemetryUsage)) usageCandidates.push(telemetryUsage);
-
-  if (isRecord(providerMeta)) {
-    const directUsage = providerMeta.usage;
-    if (isRecord(directUsage)) usageCandidates.push(directUsage);
-
-    const responseUsage = isRecord(providerMeta.response) ? providerMeta.response.usage : undefined;
-    if (isRecord(responseUsage)) usageCandidates.push(responseUsage);
-
-    for (const value of Object.values(providerMeta)) {
-      if (!isRecord(value)) continue;
-      if (isRecord(value.usage)) usageCandidates.push(value.usage);
-      if (isRecord(value.response) && isRecord(value.response.usage)) {
-        usageCandidates.push(value.response.usage);
-      }
-    }
-  }
-
-  const processUsage = (usage: Record<string, unknown>) => {
-    const promptDetails = pickRecord(usage, ['prompt_tokens_details', 'promptTokensDetails']);
-    const cachedFromDetails = promptDetails
-      ? pickNumber(promptDetails, ['cached_tokens', 'cachedTokens'])
-      : undefined;
-    const cacheCreationFromDetails = promptDetails
-      ? pickNumber(promptDetails, ['cache_creation_input_tokens', 'cacheCreationInputTokens'])
-      : undefined;
-
-    const cacheReadInput = pickNumber(usage, ['cache_read_input_tokens', 'cacheReadInputTokens']);
-    if (cacheReadInput !== undefined) {
-      setMax(readValues, 'input', cacheReadInput);
-    } else if (cachedFromDetails !== undefined) {
-      setMax(readValues, 'input', cachedFromDetails);
-    }
-
-    const cacheReadOutput = pickNumber(usage, ['cache_read_output_tokens', 'cacheReadOutputTokens']);
-    if (cacheReadOutput !== undefined) {
-      setMax(readValues, 'output', cacheReadOutput);
-    }
-
-    const cacheWriteInput = pickNumber(usage, ['cache_creation_input_tokens', 'cacheCreationInputTokens']);
-    if (cacheWriteInput !== undefined) {
-      setMax(writeValues, 'write_input', cacheWriteInput);
-    } else if (cacheCreationFromDetails !== undefined) {
-      setMax(writeValues, 'write_input', cacheCreationFromDetails);
-    }
-
-    const cacheWriteOutput = pickNumber(usage, ['cache_creation_output_tokens', 'cacheCreationOutputTokens']);
-    if (cacheWriteOutput !== undefined) {
-      setMax(writeValues, 'write_output', cacheWriteOutput);
-    }
-  };
-
-  for (const candidate of usageCandidates) {
-    processUsage(candidate);
-  }
-
-  const cacheRead = Array.from(readValues.entries()).reduce((sum, [key, value]) => {
-    if (key.startsWith('write_')) return sum;
-    return sum + value;
-  }, 0);
-
-  const cacheWrite = Array.from(writeValues.values()).reduce((sum, value) => sum + value, 0);
-
-  return { cacheRead, cacheWrite };
+  return { cacheRead };
 }
 
 function computeTimestamp(span: ReadableSpan): string {
   const [seconds, nanos] = span.endTime;
   const millis = seconds * 1000 + Math.round(nanos / 1e6);
   return new Date(millis).toISOString();
-}
-
-function toNumber(value: unknown): number {
-  const result = Number(value ?? 0);
-  return Number.isFinite(result) ? result : 0;
 }
 
 export class AiSdkTokenExporter implements SpanExporter {
@@ -347,62 +162,62 @@ export class AiSdkTokenExporter implements SpanExporter {
       for (const span of spans) {
         try {
           if (!looksLikeAiSdkSpan(span)) continue;
-          const attrs = (span.attributes ?? {}) as Attrs;
+          const attrs = (span.attributes ?? {}) as unknown;
+          if (!isCallLlmSpanAttributes(attrs)) continue;
 
-          // Check for per-call model override first
-          const modelOverride = getAttr(attrs, [
-            'ai.telemetry.metadata.modelName',
-            'ai.telemetry.metadata.model_name',
-            'experimental_telemetry.metadata.modelName',
-            'experimental_telemetry.metadata.model_name',
-            'ai.metadata.modelName',
-            'ai.metadata.model_name'
-          ]) as string | undefined;
+          const modelOverride = attrs['ai.telemetry.metadata.modelName'];
 
-          const rawModel =
-            (getAttr(attrs, [
-              'gen_ai.request.model',
-              'gen_ai.response.model',
-              'ai.model.id',
-              'ai.response.model'
-            ]) as string | undefined) ?? 'unknown';
+          const responseModel = attrs['ai.response.model'];
+          const requestedModel = attrs['gen_ai.request.model'];
+          const baseModel = attrs['ai.model.id'];
 
-          // Priority: per-call override > model mapping > raw model
-          const model = modelOverride ?? this.options.modelMapping?.[rawModel] ?? rawModel;
+          // Layered model resolution: per-call override → response alias → model.id → request target.
+          const modelCandidates = [modelOverride, responseModel, baseModel, requestedModel];
+          const primaryModel = modelCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0) ?? 'unknown';
+          const model = this.options.modelMapping?.[primaryModel] ?? primaryModel;
 
-          const provider = getAttr(attrs, ['gen_ai.system', 'ai.model.provider']);
+          const provider = attrs['ai.model.provider'];
 
-          const inputTokens = toNumber(
-            getAttr(attrs, ['gen_ai.usage.input_tokens', 'ai.usage.promptTokens', 'ai.usage.inputTokens'])
-          );
-          const outputTokens = toNumber(
-            getAttr(attrs, ['gen_ai.usage.output_tokens', 'ai.usage.completionTokens', 'ai.usage.outputTokens'])
-          );
+          const inputTokens = attrs['gen_ai.usage.input_tokens'];
+          const outputTokens = attrs['gen_ai.usage.output_tokens'];
 
-          const { cacheRead, cacheWrite } = extractCacheTokens(attrs);
-          const price = lookupPrice(provider ? String(provider) : null, String(model));
+          const { cacheRead } = extractCacheTokens(attrs);
+
+          // Provider fixes unify token accounting before cost math.
+          const normalizedTokens = normalizeProviderTokens(provider, attrs, {
+            input: inputTokens,
+            output: outputTokens,
+            cacheRead,
+            cacheWrite: 0
+          });
+
+          const price = lookupPrice(provider, model);
           const { costCents } = computeCostFromUsage(
-            { input: inputTokens, output: outputTokens, cache_read: cacheRead, cache_write: cacheWrite },
+            {
+              input: normalizedTokens.input,
+              output: normalizedTokens.output,
+              cache_read: normalizedTokens.cacheRead,
+              cache_write: normalizedTokens.cacheWrite
+            },
             price
           );
-          const finishReason = getAttr(attrs, ['ai.response.finishReason', 'gen_ai.response.finish_reasons']);
+          // Capture finish reason with GenAI semantics fallback.
+          const finishReason = isStreamFinishEventAttributes(attrs)
+            ? attrs['ai.response.finishReason'] ?? attrs['gen_ai.response.finish_reasons']?.[0]
+            : undefined;
+
           const context = resolveContext(span, attrs, this.options);
 
           const log: TokenLog = {
             time: computeTimestamp(span),
-            provider: provider ? String(provider) : null,
-            model: String(model),
-            input: inputTokens,
-            output: outputTokens,
-            cache_read: cacheRead,
-            cache_write: cacheWrite,
+            provider,
+            model,
+            input: normalizedTokens.input,
+            output: normalizedTokens.output,
+            cache_read: normalizedTokens.cacheRead,
+            cache_write: normalizedTokens.cacheWrite,
             cost_cents: costCents,
-            finish_reason:
-              Array.isArray(finishReason)
-                ? String(finishReason[0])
-                : finishReason != null
-                  ? String(finishReason)
-                  : null,
+            finish_reason: finishReason,
             user_id: context.userId ?? null,
             workspace_id: context.workspaceId ?? null,
             traceId: span.spanContext().traceId,

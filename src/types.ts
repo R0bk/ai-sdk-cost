@@ -1,3 +1,12 @@
+export type NumberLike = number | string | null | undefined;
+
+export type StandardUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
 export type TokenLog = {
   time: string;
   provider?: string | null;
