@@ -6,4 +6,3 @@ export * from './telemetry-metadata';
 export * from './openrouter';
 export * from './init';
 export * from './providers';
-export * from './parser';

@@ -1,10 +1,12 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 import { normalizeProviderTokens } from './providers';
-import { isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
+import { CallLlmSpanAttributes, isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
 
 export type Attrs = TelemetryAttributeBag;
 
@@ -34,6 +36,25 @@ const DEFAULT_WORKSPACE_ID_ATTRS = ['ai.telemetry.metadata.workspaceId', 'ai.tel
 
 export const USER_CONTEXT_KEY = Symbol('ai-sdk-cost-user');
 export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
+
+const SPAN_SAMPLE_DIR = join(process.cwd(), 'logs');
+const CALL_LLM_SAMPLE_FILE = join(SPAN_SAMPLE_DIR, 'call-llm-span-samples.ndjson');
+
+function recordCallLlmSpanSample(span: ReadableSpan, attrs: CallLlmSpanAttributes): void {
+  try {
+    mkdirSync(SPAN_SAMPLE_DIR, { recursive: true });
+    const payload = {
+      timestamp: new Date().toISOString(),
+      spanName: span.name,
+      spanId: span.spanContext().spanId,
+      traceId: span.spanContext().traceId,
+      attributes: attrs
+    };
+    appendFileSync(CALL_LLM_SAMPLE_FILE, `${JSON.stringify(payload)}\n`, 'utf8');
+  } catch {
+    // best-effort logging; ignore filesystem issues
+  }
+}
 
 function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
   const name = span.name ?? '';
@@ -129,6 +150,66 @@ function computeTimestamp(span: ReadableSpan): string {
   return new Date(millis).toISOString();
 }
 
+export const spanToLog = (span: ReadableSpan, options: ExporterOptions): TokenLog | null=> {
+  if (!looksLikeAiSdkSpan(span)) return null;
+  const attrs = (span.attributes ?? {}) as unknown;
+  if (!isCallLlmSpanAttributes(attrs)) return null;
+
+  recordCallLlmSpanSample(span, attrs);
+
+  const modelOverride = attrs['ai.telemetry.metadata.modelName'];
+
+  const responseModel = attrs['ai.response.model'];
+  const requestedModel = attrs['gen_ai.request.model'];
+  const baseModel = attrs['ai.model.id'];
+
+  // Layered model resolution: per-call override → response alias → model.id → request target.
+  const modelCandidates = [modelOverride, responseModel, baseModel, requestedModel];
+  const primaryModel = modelCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0) ?? 'unknown';
+  const model = options.modelMapping?.[primaryModel] ?? primaryModel;
+
+  const provider = attrs['ai.model.provider'];
+
+  const inputTokens = attrs['gen_ai.usage.input_tokens'];
+  const outputTokens = attrs['gen_ai.usage.output_tokens'];
+  const cacheReadTokens = attrs['gen_ai.usage.cachedInputTokens'] as number | undefined ?? 0;
+
+  // Provider fixes unify token accounting before cost math.
+  const normalizedTokens = normalizeProviderTokens(provider, attrs, {
+    input: inputTokens,
+    output: outputTokens,
+    cacheRead: cacheReadTokens,
+    cacheWrite: 0
+  });
+
+  const price = lookupPrice(provider, model);
+  const { costCents } = computeCostFromUsage(normalizedTokens, price);
+
+  // Capture finish reason with GenAI semantics fallback.
+  const finishReason = isStreamFinishEventAttributes(attrs)
+    ? attrs['ai.response.finishReason'] ?? attrs['gen_ai.response.finish_reasons']?.[0]
+    : undefined;
+
+  const context = resolveContext(span, attrs, options);
+
+  return {
+    time: computeTimestamp(span),
+    provider,
+    model,
+    input: normalizedTokens.input,
+    output: normalizedTokens.output,
+    cache_read: normalizedTokens.cacheRead,
+    cache_write: normalizedTokens.cacheWrite,
+    cost_cents: costCents,
+    finish_reason: finishReason,
+    user_id: context.userId ?? null,
+    workspace_id: context.workspaceId ?? null,
+    traceId: span.spanContext().traceId,
+    spanId: span.spanContext().spanId,
+    ...(options.includeAttributes ? { attributes: attrs } : {}),
+  };
+}
+
 export class AiSdkTokenExporter implements SpanExporter {
   constructor(
     private readonly sink: TokenLogSink,
@@ -139,67 +220,8 @@ export class AiSdkTokenExporter implements SpanExporter {
     (async () => {
       for (const span of spans) {
         try {
-          if (!looksLikeAiSdkSpan(span)) continue;
-          const attrs = (span.attributes ?? {}) as unknown;
-          if (!isCallLlmSpanAttributes(attrs)) continue;
-
-          const modelOverride = attrs['ai.telemetry.metadata.modelName'];
-
-          const responseModel = attrs['ai.response.model'];
-          const requestedModel = attrs['gen_ai.request.model'];
-          const baseModel = attrs['ai.model.id'];
-
-          // Layered model resolution: per-call override → response alias → model.id → request target.
-          const modelCandidates = [modelOverride, responseModel, baseModel, requestedModel];
-          const primaryModel = modelCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0) ?? 'unknown';
-          const model = this.options.modelMapping?.[primaryModel] ?? primaryModel;
-
-          const provider = attrs['ai.model.provider'];
-
-          const inputTokens = attrs['gen_ai.usage.input_tokens'];
-          const outputTokens = attrs['gen_ai.usage.output_tokens'];
-          const cacheReadTokens = attrs['gen_ai.usage.cachedInputTokens'] as number | undefined ?? 0;
-
-          // const { cacheRead } = extractCacheTokens(attrs);
-
-          // Provider fixes unify token accounting before cost math.
-          const normalizedTokens = normalizeProviderTokens(provider, attrs, {
-            input: inputTokens,
-            output: outputTokens,
-            cacheRead: cacheReadTokens,
-            cacheWrite: 0
-          });
-
-          const price = lookupPrice(provider, model);
-          const { costCents } = computeCostFromUsage(normalizedTokens, price);
-
-          // Capture finish reason with GenAI semantics fallback.
-          const finishReason = isStreamFinishEventAttributes(attrs)
-            ? attrs['ai.response.finishReason'] ?? attrs['gen_ai.response.finish_reasons']?.[0]
-            : undefined;
-
-          const context = resolveContext(span, attrs, this.options);
-
-          const log: TokenLog = {
-            time: computeTimestamp(span),
-            provider,
-            model,
-            input: normalizedTokens.input,
-            output: normalizedTokens.output,
-            cache_read: normalizedTokens.cacheRead,
-            cache_write: normalizedTokens.cacheWrite,
-            cost_cents: costCents,
-            finish_reason: finishReason,
-            user_id: context.userId ?? null,
-            workspace_id: context.workspaceId ?? null,
-            traceId: span.spanContext().traceId,
-            spanId: span.spanContext().spanId
-          };
-
-          // Only include attributes if explicitly requested (for debugging)
-          if (this.options.includeAttributes) log.attributes = attrs;
-
-          await this.sink.handle(log);
+          const log = spanToLog(span, this.options);
+          if (log) await this.sink.handle(log);
         } catch {
           // Intentionally swallow errors so telemetry export never crashes the tracer.
         }
