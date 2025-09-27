@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import pricePackagedRaw from './data/openrouter-pricing.json';
 import type { GitHubPublishOptions, PriceEntry, PriceMap, PriceWatcherOptions } from './types';
 
@@ -9,7 +9,7 @@ const OpenRouterModel = z.object({
   id: z.string(),
   canonical_slug: z.string().optional(),
   pricing: z
-    .object({
+    .looseObject({
       prompt: numericLike.optional(),
       completion: numericLike.optional(),
       request: numericLike.optional(),
@@ -19,7 +19,6 @@ const OpenRouterModel = z.object({
       input_cache_read: numericLike.optional(),
       input_cache_write: numericLike.optional()
     })
-    .passthrough()
     .optional()
 });
 
@@ -37,10 +36,10 @@ const PriceEntrySchema = z.object({
   internal_reasoning_usd: z.number().nullable().optional(),
   input_cache_read_per_1m_usd: z.number().nullable().optional(),
   input_cache_write_per_1m_usd: z.number().nullable().optional(),
-  extras: z.record(z.number().nullable()).optional()
+  extras: z.record(z.string(), z.number().nullable()).optional()
 });
 
-const PackagedPricingSchema = z.record(PriceEntrySchema);
+const PackagedPricingSchema = z.record(z.string(), PriceEntrySchema);
 
 function toNumberOrNull(value: unknown): number | null {
   if (value == null) return null;

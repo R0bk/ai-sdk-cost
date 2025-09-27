@@ -1,13 +1,22 @@
-export interface GoogleUsageMetadata {
-  thoughtsTokenCount?: number;
-  promptTokenCount?: number;
-  candidatesTokenCount?: number;
-  totalTokenCount?: number;
-  cachedContentTokenCount?: number;
-}
+import { z } from 'zod/v4';
+import { nullishInt } from './schema-helpers';
 
-export interface GoogleProviderUsage {
-  google?: {
-    usageMetadata?: GoogleUsageMetadata | null;
-  } & Record<string, unknown>;
-}
+const googleUsageMetadataSchema = z
+  .looseObject({
+    thoughtsTokenCount: nullishInt(),
+    promptTokenCount: nullishInt(),
+    candidatesTokenCount: nullishInt(),
+    totalTokenCount: nullishInt(),
+    cachedContentTokenCount: nullishInt()
+  })
+  .nullish();
+
+export const googleMetadataSchema = z.looseObject({
+  google: z
+    .looseObject({
+      usageMetadata: googleUsageMetadataSchema
+    })
+    .nullish()
+});
+
+export type GoogleProviderUsage = z.infer<typeof googleMetadataSchema>;

@@ -1,11 +1,10 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping, NumberLike } from './types';
-import { toFiniteNumber, getAttr } from './parser';
+import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 import { normalizeProviderTokens } from './providers';
-import { CallLlmSpanAttributes, isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
+import { isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
 
 export type Attrs = TelemetryAttributeBag;
 
@@ -76,8 +75,8 @@ function resolveContext(
   // 3. OpenTelemetry context values
 
   // Check attributes first
-  let userId: string | null | undefined = getAttr(attrs, userAttrKeys) as string | null | undefined;
-  let workspaceId: string | null | undefined = getAttr(attrs, workspaceAttrKeys) as string | null | undefined;
+  let userId = userAttrKeys.map(key => attrs[key]).find(key => key !== undefined) as string | null | undefined;
+  let workspaceId = workspaceAttrKeys.map(key => attrs[key]).find(key => key !== undefined) as string | null | undefined;
 
   // If not found in attributes, try getContext callback
   const direct = options.getContext?.(span, attrs) ?? undefined;
@@ -102,7 +101,7 @@ function resolveContext(
 }
 
 function computeCostFromUsage(
-  usage: { input: number; output: number; cache_read: number; cache_write: number },
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number },
   price: PriceEntry | null
 ): { costCents: number | null } {
   if (!price) return { costCents: null };
@@ -116,33 +115,12 @@ function computeCostFromUsage(
   const costUsdRaw =
     usage.input * inputPrice +
     usage.output * outputPrice +
-    usage.cache_read * cacheReadPrice +
-    usage.cache_write * cacheWritePrice +
+    usage.cacheRead * cacheReadPrice +
+    usage.cacheWrite * cacheWritePrice +
     requestPrice;
   const costUsd = Number(costUsdRaw.toFixed(12));
   const costCents = Number((costUsd * 100).toFixed(6));
   return { costCents };
-}
-
-function extractCacheTokens(attrs: CallLlmSpanAttributes): { cacheRead: number } {
-  const readValues = new Map<string, number>();
-
-  const setMax = (map: Map<string, number>, key: string, value: NumberLike) => {
-    const num = toFiniteNumber(value);
-    if (num === undefined) return;
-    const current = map.get(key);
-    if (current === undefined || num > current) {
-      map.set(key, num);
-    }
-  };
-
-  const attrCacheIn = attrs['ai.usage.cachedInputTokens'] as number | undefined;
-
-  setMax(readValues, 'input', attrCacheIn);
-
-  const cacheRead = Array.from(readValues.entries()).reduce((sum, [_, value]) => sum + value, 0);
-
-  return { cacheRead };
 }
 
 function computeTimestamp(span: ReadableSpan): string {
@@ -180,27 +158,21 @@ export class AiSdkTokenExporter implements SpanExporter {
 
           const inputTokens = attrs['gen_ai.usage.input_tokens'];
           const outputTokens = attrs['gen_ai.usage.output_tokens'];
+          const cacheReadTokens = attrs['gen_ai.usage.cachedInputTokens'] as number | undefined ?? 0;
 
-          const { cacheRead } = extractCacheTokens(attrs);
+          // const { cacheRead } = extractCacheTokens(attrs);
 
           // Provider fixes unify token accounting before cost math.
           const normalizedTokens = normalizeProviderTokens(provider, attrs, {
             input: inputTokens,
             output: outputTokens,
-            cacheRead,
+            cacheRead: cacheReadTokens,
             cacheWrite: 0
           });
 
           const price = lookupPrice(provider, model);
-          const { costCents } = computeCostFromUsage(
-            {
-              input: normalizedTokens.input,
-              output: normalizedTokens.output,
-              cache_read: normalizedTokens.cacheRead,
-              cache_write: normalizedTokens.cacheWrite
-            },
-            price
-          );
+          const { costCents } = computeCostFromUsage(normalizedTokens, price);
+
           // Capture finish reason with GenAI semantics fallback.
           const finishReason = isStreamFinishEventAttributes(attrs)
             ? attrs['ai.response.finishReason'] ?? attrs['gen_ai.response.finish_reasons']?.[0]
@@ -225,9 +197,7 @@ export class AiSdkTokenExporter implements SpanExporter {
           };
 
           // Only include attributes if explicitly requested (for debugging)
-          if (this.options.includeAttributes) {
-            log.attributes = attrs;
-          }
+          if (this.options.includeAttributes) log.attributes = attrs;
 
           await this.sink.handle(log);
         } catch {

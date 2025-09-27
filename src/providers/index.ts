@@ -1,14 +1,48 @@
-import { toFiniteNumber, toNumber, parseMaybeJSON } from '../parser';
-import type { AnthropicProviderUsage } from './anthropic';
-import type { GoogleProviderUsage } from './google';
-import type { OpenAIProviderUsage } from './openai';
-import { CallLlmSpanAttributes } from '../telemetry-types';
-import { StandardUsage } from '../types';
+import { z } from 'zod/v4';
+import { anthropicMetadataSchema } from './anthropic';
+import { googleMetadataSchema } from './google';
+import { openaiMetadataSchema } from './openai';
+import { CallLlmSpanAttributes, TelemetryStructuredValue } from '../telemetry-types';
+import { NumberLike, StandardUsage } from '../types';
 export * from './anthropic';
 export * from './google';
 export * from './openai';
 
-export type ProviderUsage = AnthropicProviderUsage | GoogleProviderUsage | OpenAIProviderUsage;
+const toFiniteAttrNumber = (value: TelemetryStructuredValue | undefined): number | undefined => {
+  return typeof value === 'number' || typeof value === 'string' ? toFiniteNumber(value) : undefined;
+};
+
+const toFiniteNumber = (value: NumberLike): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  const num = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+
+const providerMetadataSchema = z.looseObject({
+  ...anthropicMetadataSchema.shape,
+  ...openaiMetadataSchema.shape,
+  ...googleMetadataSchema.shape
+});
+
+export type ProviderMetadata = z.infer<typeof providerMetadataSchema>;
+
+const providerMetadataInputSchema = z.preprocess((value) => {
+  if (value == null) return undefined;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}, providerMetadataSchema.optional());
+
+const parseProviderMetadata = (value: unknown): ProviderMetadata | null => {
+  const result = providerMetadataInputSchema.safeParse(value);
+  return result.success ? result.data ?? null : null;
+};
 
 /**
  * Provider-specific token normalization to handle inconsistencies
@@ -28,76 +62,64 @@ export function normalizeProviderTokens(
   if (!provider) return sdkTokens;
 
   const providerLower = provider.toLowerCase();
-  const providerMetadataRaw = parseMaybeJSON(attrs['ai.response.providerMetadata']) as ProviderUsage | null | undefined;
-  if (providerMetadataRaw === undefined && providerMetadataRaw === null) return sdkTokens
+  const providerMetadata = parseProviderMetadata(attrs['ai.response.providerMetadata']);
+  if (!providerMetadata) return sdkTokens;
 
   // Anthropic-specific fixes
   if (providerLower.includes('anthropic')) {
-    const anthropicMeta = (providerMetadataRaw as AnthropicProviderUsage)?.anthropic;
-    if (anthropicMeta !== undefined && anthropicMeta !== null) {
-      const anthropicUsage = anthropicMeta.usage;
-      if (anthropicUsage !== undefined && anthropicUsage !== null) {
-        // Bug fixes:
-        // 1. Provider metadata reports incorrect output_tokens (usually 1-2)
-        // 2. SDK totalTokens doesn't include cache_write/cache_read
-        const cacheReadTokens = toFiniteNumber(anthropicUsage.cache_read_input_tokens) ?? 0;
-        const cacheWriteTokens = toFiniteNumber(anthropicUsage.cache_creation_input_tokens) ?? 0;
+    const anthropicMetadata = providerMetadata.anthropic;
+    const anthropicUsage = anthropicMetadata?.usage;
+    if (anthropicUsage) {
+      // Provider metadata reports incorrect output_tokens; prefer SDK output.
+      const cacheReadTokens = toFiniteNumber(anthropicUsage.cache_read_input_tokens);
+      const cacheWriteTokens =
+        toFiniteNumber(anthropicUsage.cache_creation_input_tokens) ??
+        toFiniteNumber(anthropicMetadata?.cacheCreationInputTokens);
 
-        return {
-          input: sdkTokens.input,
-          output: sdkTokens.output, // Use SDK value, not provider metadata
-          cacheRead: cacheReadTokens || sdkTokens.cacheRead,
-          cacheWrite: cacheWriteTokens || sdkTokens.cacheWrite
-        };
-      }
+      return {
+        input: sdkTokens.input,
+        output: sdkTokens.output,
+        cacheRead: cacheReadTokens ?? sdkTokens.cacheRead,
+        cacheWrite: cacheWriteTokens ?? 0
+      };
     }
   }
-
-
+  
+  
   // OpenAI-specific handling
   if (providerLower.includes('openai')) {
-    const openaiMeta = (providerMetadataRaw as OpenAIProviderUsage)?.openai;
-    // OpenAI reports input_tokens = actual_input + cache_read
-    // We need to separate input from cache_read
+    const openaiMetadata = providerMetadata.openai;
+    const cachedTokens =
+      toFiniteNumber(openaiMetadata?.usage?.cached_input_tokens) ??
+      toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
 
-    const cachedTokens = toNumber(attrs['ai.usage.cachedInputTokens']);
-
-    // Separate input from cache_read (OpenAI includes both in input_tokens)
-    const actualInput = sdkTokens.input - (cachedTokens || 0);
+    // OpenAI reports cached tokens inside input_tokens; subtract the reused portion.
+    const actualInput = Math.max(0, sdkTokens.input - (cachedTokens ?? 0));
 
     return {
-      input: Math.max(0, actualInput),
-      output: sdkTokens.output, // Keep output as-is (includes reasoning)
-      cacheRead: cachedTokens || sdkTokens.cacheRead,
-      cacheWrite: sdkTokens.cacheWrite
+      input: actualInput,
+      output: sdkTokens.output,
+      cacheRead: cachedTokens ?? sdkTokens.cacheRead,
+      cacheWrite: 0 // OpenAI doesn't report cache write tokens
     };
   }
-
-
+  
+  
   // Google/Gemini-specific handling
   if (providerLower.includes('google') || providerLower.includes('gemini')) {
-    const googleMeta = (providerMetadataRaw as GoogleProviderUsage)?.google;
-    // Gemini reports promptTokenCount = actual_input + cache_read
-    let cacheReadTokens = 0;
+    const googleMetadata = providerMetadata.google;
+    const cacheReadTokens =
+      toFiniteNumber(googleMetadata?.usageMetadata?.cachedContentTokenCount) ??
+      toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
 
-    const usageMetadata = googleMeta?.usageMetadata;
-    if (usageMetadata !== undefined && usageMetadata !== null) {
-      cacheReadTokens = toFiniteNumber(usageMetadata.cachedContentTokenCount) ?? 0;
-    }
-
-    // Also check standard attributes
-    if (!cacheReadTokens) {
-      cacheReadTokens = toNumber(attrs['ai.usage.cachedInputTokens']);
-    }
-
-    // Separate input from cache_read (Gemini includes both in promptTokenCount)
-    const actualInput = sdkTokens.input - (cacheReadTokens || 0);
+    // Gemini reports cached tokens in promptTokenCount; separate them from new input.
+    const actualInput = Math.max(0, sdkTokens.input - (cacheReadTokens ?? 0));
 
     return {
-      input: Math.max(0, actualInput),
-      output: sdkTokens.output, // Keep output as-is
-      cacheRead: cacheReadTokens || sdkTokens.cacheRead,
-      cacheWrite: 0 // Gemini uses implicit caching, no explicit cache writes
+      input: actualInput,
+      output: sdkTokens.output,
+      cacheRead: cacheReadTokens ?? sdkTokens.cacheRead,
+      cacheWrite: 0 // Google doesn't report cache write tokens
     };
   }
 
