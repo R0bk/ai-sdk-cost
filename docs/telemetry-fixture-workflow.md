@@ -31,7 +31,25 @@ This guide explains how to capture real spans from the AI SDK, convert them into
 
 4. Disable capture by unsetting `AI_SDK_COST_CAPTURE_SPANS` (or leave it `false`) so the exporter avoids the `fs` path in regular builds.
 
-## 2. Promote samples to fixtures
+## 2. Capture overrides with strong typing
+
+When wiring telemetry metadata, use the exported helper to keep overrides in sync:
+
+```ts
+import { AiCostMetadataSchema, type AiCostMetadata } from 'ai-sdk-cost';
+
+const metadata = {
+  userId: 'user-123',
+  workspaceId: 'workspace-456',
+  modelName: 'gpt-4o'
+} satisfies AiCostMetadata;
+
+AiCostMetadataSchema.parse(metadata); // runtime guard & OpenRouter validation
+```
+
+`AiCostMetadata` narrows `modelName` to the packaged OpenRouter catalogue, and the schema validates user/workspace overrides before you emit spans.
+
+## 3. Promote samples to fixtures
 
 1. Copy interesting entries from the NDJSON file into `tests/fixtures/<group>/`.
 2. Use the exact JSON structure above—`name`, `attributes`, `traceId`, and `spanId`—so tests can load them verbatim.
