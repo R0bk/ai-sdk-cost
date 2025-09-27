@@ -1,3 +1,4 @@
+import '../scripts/register-span-fixture-logger'
 import { initAiSdkCostTelemetry, consoleSink } from '../src';
 import { ModelMessage, streamText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';

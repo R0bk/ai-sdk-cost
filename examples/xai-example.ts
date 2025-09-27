@@ -1,28 +1,24 @@
 import '../scripts/register-span-fixture-logger'
 import { initAiSdkCostTelemetry, consoleSink } from '../src';
 import { ModelMessage, streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { xai } from '@ai-sdk/xai';
 import { generateModelMessages } from './fixtures';
 
+// XAI simply uses the OpenAI Compatiable Provider
 const telemetry = initAiSdkCostTelemetry({
   sink: consoleSink(),
-  getContext: () => ({ userId: 'demo-user-openai', workspaceId: 'demo-workspace-openai' })
+  getContext: () => ({ userId: 'demo-user-xai', workspaceId: 'demo-workspace-xai' })
 });
 
 async function runOnce(messages: ModelMessage[]) {
   const stream = await streamText({
-    model: openai('gpt-5-mini'),
+    model: xai('grok-4-fast'),
     messages,
     experimental_telemetry: {
       isEnabled: true,
       metadata: {
-        userId: 'demo-user-openai',
-        workspaceId: 'demo-workspace-openai'
-      }
-    },
-    providerOptions: {
-      openai: {
-        promptCacheKey: 'ai-sdk-cost-demo-cache'
+        userId: 'demo-user-xai',
+        workspaceId: 'demo-workspace-xai'
       }
     }
   });
@@ -31,40 +27,40 @@ async function runOnce(messages: ModelMessage[]) {
   for await (const part of stream.textStream) {
     chunks.push(part);
   }
+
   const metadata = await stream.providerMetadata?.catch?.(() => undefined);
   const usage = await stream.usage?.catch?.(() => undefined);
   return { text: chunks.join(''), metadata, usage };
 }
 
 async function main() {
-  if (!process.env.AI_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
-    console.error('Set AI_OPENAI_API_KEY or OPENAI_API_KEY before running this script.');
+  if (!process.env.XAI_API_KEY) {
+    console.error('XAI_API_KEY before running this script.');
     process.exit(1);
   }
 
   const messages = generateModelMessages();
+
   try {
-    console.log('Warm-up call (fills cache)...');
+    console.log('Warming xAI cache...');
     const warm = await runOnce(messages);
     console.log('Warm usage (SDK):', warm.usage);
     console.log('Warm provider metadata:', warm.metadata);
 
-    console.log('Second call (should reuse cache if provider supports it)...');
-    const cool = await runOnce(messages);
-    console.log('Second usage (SDK):', cool.usage);
-    console.log('Second provider metadata:', cool.metadata);
-    const cachedTokens = Number(
-      (cool.usage?.cachedInputTokens ??
-        cool.metadata?.openai?.cachedPromptTokens ??
-        0)
-    );
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    console.log('Second call to verify cached tokens...');
+    const cached = await runOnce(messages);
+    console.log('Cached usage (SDK):', cached.usage);
+    console.log('Cached provider metadata:', cached.metadata);
+
+    const cachedTokens = Number(cached.usage?.cachedInputTokens);
+
     if (!(cachedTokens > 0)) {
-      throw new Error(
-        `Expected OpenAI cached tokens > 0 on second call, received ${cachedTokens}`
-      );
+      throw new Error(`Expected cached tokens > 0 after reuse, received ${cachedTokens}`);
     }
 
-    console.log('Model output:', cool.text);
+    console.log('Model output:', cached.text);
   } finally {
     await telemetry.tracerProvider.forceFlush();
     await telemetry.tracerProvider.shutdown();

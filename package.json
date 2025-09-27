@@ -1,6 +1,6 @@
 {
   "name": "ai-sdk-cost",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "DB-agnostic cost telemetry helper for Vercel AI SDK with OpenRouter pricing watcher",
   "license": "MIT",
   "repository": {
@@ -31,6 +31,8 @@
     "test:external:anthropic": "tsx examples/anthropic-example.ts",
     "test:anthropic-cache": "tsx examples/anthropic-cache-issue.ts",
     "test:external:google": "tsx examples/google-example.ts",
+    "test:external:xai": "tsx examples/xai-example.ts",
+    "test:external:mistral": "tsx examples/mistral-example.ts",
     "test:user-override": "tsx examples/user-workspace-override.ts",
     "test:callback": "tsx examples/user-workspace-callback-test.ts",
     "test:pricing": "tsx scripts/verify-pricing.ts"
@@ -45,7 +47,9 @@
   "devDependencies": {
     "@ai-sdk/anthropic": "^2.0.17",
     "@ai-sdk/google": "2.0.14",
+    "@ai-sdk/mistral": "^2.0.0",
     "@ai-sdk/openai": "^2.0.32",
+    "@ai-sdk/xai": "^2.0.0",
     "@anthropic-ai/sdk": "^0.35.0",
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.11",

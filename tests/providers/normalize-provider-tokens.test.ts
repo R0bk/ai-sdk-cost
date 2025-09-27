@@ -54,6 +54,46 @@ const googleMetadata = {
   }
 };
 
+const xaiMetadata = {
+  xai: {
+    usage: {
+      prompt_tokens: 640,
+      completion_tokens: 128,
+      prompt_tokens_details: {
+        cached_tokens: 480
+      }
+    }
+  }
+};
+
+const xaiMetadataNoCacheDetails = {
+  xai: {
+    usage: {
+      prompt_tokens: 420,
+      completion_tokens: 64
+    }
+  }
+};
+
+const mistralMetadata = {
+  mistral: {
+    usage: {
+      prompt_tokens: 512,
+      completion_tokens: 96,
+      cached_tokens: 352
+    }
+  }
+};
+
+const mistralMetadataNoCacheDetails = {
+  mistral: {
+    usage: {
+      prompt_tokens: 256,
+      completion_tokens: 32
+    }
+  }
+};
+
 const serialize = (value: unknown) => JSON.stringify(value);
 
 (() => {
@@ -113,6 +153,98 @@ const serialize = (value: unknown) => JSON.stringify(value);
   assert.equal(normalized.input, 100);
   assert.equal(normalized.output, baseUsage.output);
   assert.equal(normalized.cacheRead, 120);
+  assert.equal(normalized.cacheWrite, 0);
+})();
+
+(() => {
+  const attrs: CallLlmSpanAttributes = {
+    ...baseAttrs,
+    'ai.model.provider': 'xai.responses',
+    'gen_ai.system': 'xai',
+    'ai.response.providerMetadata': serialize(xaiMetadata)
+  };
+
+  const sdkUsage: StandardUsage = {
+    ...baseUsage,
+    input: 640,
+    output: 128
+  };
+
+  const normalized = normalizeProviderTokens('xai', attrs, sdkUsage);
+
+  assert.equal(normalized.input, 160);
+  assert.equal(normalized.output, 128);
+  assert.equal(normalized.cacheRead, 480);
+  assert.equal(normalized.cacheWrite, 0);
+})();
+
+(() => {
+  const attrs: CallLlmSpanAttributes = {
+    ...baseAttrs,
+    'ai.model.provider': 'xai.responses',
+    'gen_ai.system': 'xai',
+    'ai.response.providerMetadata': xaiMetadataNoCacheDetails,
+    'ai.usage.cachedInputTokens': 300
+  };
+
+  const sdkUsage: StandardUsage = {
+    ...baseUsage,
+    input: 420,
+    output: 64,
+    cacheRead: 12
+  };
+
+  const normalized = normalizeProviderTokens('grok-beta', attrs, sdkUsage);
+
+  assert.equal(normalized.input, 120);
+  assert.equal(normalized.output, 64);
+  assert.equal(normalized.cacheRead, 300);
+  assert.equal(normalized.cacheWrite, 0);
+})();
+
+(() => {
+  const attrs: CallLlmSpanAttributes = {
+    ...baseAttrs,
+    'ai.model.provider': 'mistral',
+    'gen_ai.system': 'mistral',
+    'ai.response.providerMetadata': serialize(mistralMetadata)
+  };
+
+  const sdkUsage: StandardUsage = {
+    ...baseUsage,
+    input: 512,
+    output: 96
+  };
+
+  const normalized = normalizeProviderTokens('mistral', attrs, sdkUsage);
+
+  assert.equal(normalized.input, 160);
+  assert.equal(normalized.output, 96);
+  assert.equal(normalized.cacheRead, 352);
+  assert.equal(normalized.cacheWrite, 0);
+})();
+
+(() => {
+  const attrs: CallLlmSpanAttributes = {
+    ...baseAttrs,
+    'ai.model.provider': 'mistral',
+    'gen_ai.system': 'mistral',
+    'ai.response.providerMetadata': mistralMetadataNoCacheDetails,
+    'ai.usage.cachedInputTokens': 128
+  };
+
+  const sdkUsage: StandardUsage = {
+    ...baseUsage,
+    input: 256,
+    output: 32,
+    cacheRead: 0
+  };
+
+  const normalized = normalizeProviderTokens('Mistral-large', attrs, sdkUsage);
+
+  assert.equal(normalized.input, 128);
+  assert.equal(normalized.output, 32);
+  assert.equal(normalized.cacheRead, 128);
   assert.equal(normalized.cacheWrite, 0);
 })();
 

@@ -1,12 +1,16 @@
 import { z } from 'zod/v4';
 import { anthropicMetadataSchema } from './anthropic';
 import { googleMetadataSchema } from './google';
+import { mistralMetadataSchema } from './mistral';
 import { openaiMetadataSchema } from './openai';
+import { xaiMetadataSchema } from './xai';
 import { CallLlmSpanAttributes, TelemetryStructuredValue } from '../telemetry-types';
 import { StandardUsage } from '../types';
 export * from './anthropic';
 export * from './google';
 export * from './openai';
+export * from './xai';
+export * from './mistral';
 
 const toFiniteAttrNumber = (value: TelemetryStructuredValue | undefined): number | undefined => {
   return typeof value === 'number' || typeof value === 'string' ? toFiniteNumber(value) : undefined;
@@ -22,7 +26,9 @@ const toFiniteNumber = (value: number | string | null | undefined): number | und
 const providerMetadataSchema = z.looseObject({
   ...anthropicMetadataSchema.shape,
   ...openaiMetadataSchema.shape,
-  ...googleMetadataSchema.shape
+  ...googleMetadataSchema.shape,
+  ...xaiMetadataSchema.shape,
+  ...mistralMetadataSchema.shape
 });
 
 export type ProviderMetadata = z.infer<typeof providerMetadataSchema>;
@@ -65,6 +71,8 @@ export function normalizeProviderTokens(
   const providerMetadata = parseProviderMetadata(attrs['ai.response.providerMetadata']);
   if (!providerMetadata) return sdkTokens;
 
+  const attrCachedTokens = toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
+
   // Anthropic-specific fixes
   if (providerLower.includes('anthropic')) {
     const anthropicMetadata = providerMetadata.anthropic;
@@ -91,7 +99,7 @@ export function normalizeProviderTokens(
     const openaiMetadata = providerMetadata.openai;
     const cachedTokens =
       toFiniteNumber(openaiMetadata?.usage?.cached_input_tokens) ??
-      toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
+      attrCachedTokens;
 
     // OpenAI reports cached tokens inside input_tokens; subtract the reused portion.
     const actualInput = Math.max(0, sdkTokens.input - (cachedTokens ?? 0));
@@ -110,7 +118,7 @@ export function normalizeProviderTokens(
     const googleMetadata = providerMetadata.google;
     const cacheReadTokens =
       toFiniteNumber(googleMetadata?.usageMetadata?.cachedContentTokenCount) ??
-      toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
+      attrCachedTokens;
 
     // Gemini reports cached tokens in promptTokenCount; separate them from new input.
     const actualInput = Math.max(0, sdkTokens.input - (cacheReadTokens ?? 0));
@@ -120,6 +128,42 @@ export function normalizeProviderTokens(
       output: sdkTokens.output,
       cacheRead: cacheReadTokens ?? sdkTokens.cacheRead,
       cacheWrite: 0 // Google doesn't report cache write tokens
+    };
+  }
+
+  // xAI/Grok-specific handling
+  if (providerLower.includes('xai') || providerLower.includes('grok')) {
+    const xaiMetadata = providerMetadata.xai ?? providerMetadata.grok;
+    const xaiUsage = xaiMetadata?.usage;
+    const cachedTokens =
+      toFiniteNumber(xaiUsage?.cached_tokens) ??
+      attrCachedTokens;
+
+    const actualInput = Math.max(0, sdkTokens.input - (cachedTokens ?? 0));
+
+    return {
+      input: actualInput,
+      output: sdkTokens.output,
+      cacheRead: cachedTokens ?? sdkTokens.cacheRead,
+      cacheWrite: 0
+    };
+  }
+
+  // Mistral-specific handling
+  if (providerLower.includes('mistral')) {
+    const mistralMetadata = providerMetadata.mistral;
+    const mistralUsage = mistralMetadata?.usage;
+    const cachedTokens =
+      toFiniteNumber(mistralUsage?.cached_tokens) ??
+      attrCachedTokens;
+
+    const actualInput = Math.max(0, sdkTokens.input - (cachedTokens ?? 0));
+
+    return {
+      input: actualInput,
+      output: sdkTokens.output,
+      cacheRead: cachedTokens ?? sdkTokens.cacheRead,
+      cacheWrite: 0
     };
   }
 

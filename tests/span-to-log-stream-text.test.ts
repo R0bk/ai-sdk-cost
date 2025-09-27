@@ -10,6 +10,8 @@ import googleNoCache from './fixtures/stream-text/google-no-cache.json' assert {
 import googleWithCache from './fixtures/stream-text/google-with-cache.json' assert { type: 'json' };
 import openaiNoCache from './fixtures/stream-text/openai-no-cache.json' assert { type: 'json' };
 import openaiWithCache from './fixtures/stream-text/openai-with-cache.json' assert { type: 'json' };
+import xaiNoCache from './fixtures/stream-text/xai-no-cache.json' assert { type: 'json' };
+import mistralNoCache from './fixtures/stream-text/mistral-no-cache.json' assert { type: 'json' };
 
 type SpanFixture = {
   name: string;
@@ -41,7 +43,9 @@ const fixtures = {
   googleNoCache: asFixture(googleNoCache),
   googleWithCache: asFixture(googleWithCache),
   anthropicNoCache: asFixture(anthropicNoCache),
-  anthropicWithCache: asFixture(anthropicWithCache)
+  anthropicWithCache: asFixture(anthropicWithCache),
+  xaiNoCache: asFixture(xaiNoCache),
+  mistralNoCache: asFixture(mistralNoCache),
 };
 
 const DEFAULT_TRACE_ID = '0000000000000000000000000000abc1';
@@ -161,4 +165,26 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.cache_write, 0);
   assert.equal(log.user_id, "user-6");
   assert.equal(log.workspace_id, "workspace-6");
+})();
+
+(() => {
+  const log = toLog(fixtures.xaiNoCache);
+  expectProvider(log.provider, 'xai');
+  assert.equal(log.input, 2166);
+  assert.equal(log.output, 598);
+  assert.equal(log.cache_read, 0);
+  assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "demo-user-xai");
+  assert.equal(log.workspace_id, "demo-workspace-xai");
+})();
+
+(() => {
+  const log = toLog(fixtures.mistralNoCache);
+  expectProvider(log.provider, 'mistral');
+  assert.equal(log.input, 2216);
+  assert.equal(log.output, 740);
+  assert.equal(log.cache_read, 0);
+  assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "demo-user-mistral");
+  assert.equal(log.workspace_id, "demo-workspace-mistral");
 })();
