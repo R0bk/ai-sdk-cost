@@ -23,7 +23,13 @@ async function runOnce(prompt: string) {
   const stream = await streamText({
     model: openai('gpt-5-mini'),
     messages,
-    experimental_telemetry: { isEnabled: true },
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: {
+        userId: 'demo-user-openai',
+        workspaceId: 'demo-workspace-openai'
+      }
+    },
     providerOptions: {
       openai: {
         promptCacheKey: 'ai-sdk-cost-demo-cache'

@@ -44,13 +44,11 @@ export type TelemetryInitResult = {
 
 const DEFAULT_USER_ATTRS = [
   'ai.telemetry.metadata.userId',
-  'ai.telemetry.metadata.user_id',
   'app.user.id',
   'user.id'
 ];
 const DEFAULT_WORKSPACE_ATTRS = [
   'ai.telemetry.metadata.workspaceId',
-  'ai.telemetry.metadata.workspace_id',
   'app.workspace.id',
   'workspace.id'
 ];

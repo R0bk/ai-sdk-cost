@@ -23,7 +23,13 @@ async function runOnce(prompt: string) {
   const stream = await streamText({
     model: google('gemini-2.5-flash'),
     messages,
-    experimental_telemetry: { isEnabled: true }
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: {
+        userId: 'demo-user-google',
+        workspaceId: 'demo-workspace-google'
+      }
+    }
   });
 
   const chunks: string[] = [];

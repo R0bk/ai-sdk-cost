@@ -70,7 +70,7 @@ async function main() {
   dynamicSpan.setAttributes({
     'gen_ai.system': 'custom-proxy',
     'gen_ai.request.model': 'prod-deployment-xyz-123', // Unknown deployment name
-    'experimental_telemetry.metadata.modelName': 'gpt-4o', // Override the model name for pricing!
+    'ai.telemetry.metadata.modelName': 'gpt-4o', // Override the model name for pricing!
     'gen_ai.usage.input_tokens': 1800,
     'gen_ai.usage.output_tokens': 600,
     'ai.response.finishReason': 'stop'

@@ -39,7 +39,7 @@ async function main() {
   span1.end();
   await telemetry.tracerProvider.forceFlush();
 
-  // Test 2: Override via experimental_telemetry.metadata.userId
+  // Test 2: Override via ai.telemetry.metadata.userId
   console.log('=== Test 2: Override via metadata.userId ===');
   const span2 = telemetry.tracer.startSpan('ai.streamText.doStream');
   span2.setAttributes({
@@ -47,54 +47,10 @@ async function main() {
     'gen_ai.request.model': 'gpt-4o-mini',
     'gen_ai.usage.input_tokens': 100,
     'gen_ai.usage.output_tokens': 50,
-    'experimental_telemetry.metadata.userId': 'override-user-123',
-    'experimental_telemetry.metadata.workspaceId': 'override-workspace-456'
+    'ai.telemetry.metadata.userId': 'override-user-123',
+    'ai.telemetry.metadata.workspaceId': 'override-workspace-456'
   });
   span2.end();
-  await telemetry.tracerProvider.forceFlush();
-
-  // Test 3: Override via metadata with underscore notation
-  console.log('=== Test 3: Override via metadata.user_id (underscore) ===');
-  const span3 = telemetry.tracer.startSpan('ai.streamText.doStream');
-  span3.setAttributes({
-    'gen_ai.system': 'openai',
-    'gen_ai.request.model': 'gpt-4o-mini',
-    'gen_ai.usage.input_tokens': 100,
-    'gen_ai.usage.output_tokens': 50,
-    'experimental_telemetry.metadata.user_id': 'underscore-user',
-    'experimental_telemetry.metadata.workspace_id': 'underscore-workspace'
-  });
-  span3.end();
-  await telemetry.tracerProvider.forceFlush();
-
-  // Test 4: Test JSON stringified metadata
-  console.log('=== Test 4: JSON stringified metadata ===');
-  const span4 = telemetry.tracer.startSpan('ai.streamText.doStream');
-  span4.setAttributes({
-    'gen_ai.system': 'openai',
-    'gen_ai.request.model': 'gpt-4o-mini',
-    'gen_ai.usage.input_tokens': 100,
-    'gen_ai.usage.output_tokens': 50,
-    'experimental_telemetry.metadata': JSON.stringify({
-      userId: 'json-user',
-      workspaceId: 'json-workspace'
-    })
-  });
-  span4.end();
-  await telemetry.tracerProvider.forceFlush();
-
-  // Test 5: Direct attributes (ai.user.id)
-  console.log('=== Test 5: Direct ai.user.id attributes ===');
-  const span5 = telemetry.tracer.startSpan('ai.streamText.doStream');
-  span5.setAttributes({
-    'gen_ai.system': 'openai',
-    'gen_ai.request.model': 'gpt-4o-mini',
-    'gen_ai.usage.input_tokens': 100,
-    'gen_ai.usage.output_tokens': 50,
-    'ai.user.id': 'direct-ai-user',
-    'ai.workspace.id': 'direct-ai-workspace'
-  });
-  span5.end();
   await telemetry.tracerProvider.forceFlush();
 
   // Summary
@@ -104,9 +60,6 @@ async function main() {
   const results = [
     { test: 'Test 1 (global defaults)', expected: { user: 'global-default-user', workspace: 'global-default-workspace' }},
     { test: 'Test 2 (metadata.userId)', expected: { user: 'override-user-123', workspace: 'override-workspace-456' }},
-    { test: 'Test 3 (metadata.user_id)', expected: { user: 'underscore-user', workspace: 'underscore-workspace' }},
-    { test: 'Test 4 (JSON metadata)', expected: { user: 'json-user', workspace: 'json-workspace' }},
-    { test: 'Test 5 (ai.user.id)', expected: { user: 'direct-ai-user', workspace: 'direct-ai-workspace' }}
   ];
 
   results.forEach((result, i) => {

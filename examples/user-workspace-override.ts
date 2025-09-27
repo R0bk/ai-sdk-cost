@@ -73,28 +73,11 @@ async function main() {
   await consumeStream(result3);
   await telemetry.tracerProvider.forceFlush();
 
-  // Call 4: Test alternative attribute names (user_id, workspace_id)
-  console.log('\nCall 4 - Alternative attribute names (user_id, workspace_id):');
-  const result4 = await streamText({
-    model: openai('gpt-4o-mini'),
-    messages: [{ role: 'user', content: 'Count to three' }],
-    experimental_telemetry: {
-      isEnabled: true,
-      metadata: {
-        user_id: 'underscore-user',
-        workspace_id: 'underscore-workspace'
-      }
-    }
-  });
-  await consumeStream(result4);
-  await telemetry.tracerProvider.forceFlush();
-
   console.log('\n✅ User/Workspace override test complete!');
   console.log('Check the logs above:');
   console.log('  - Call 1: Should show "default-user" and "default-workspace"');
   console.log('  - Call 2: Should show "specific-user-123" and "default-workspace"');
   console.log('  - Call 3: Should show "customer-456" and "team-alpha"');
-  console.log('  - Call 4: Should show "underscore-user" and "underscore-workspace"');
 
   await telemetry.tracerProvider.shutdown();
 }

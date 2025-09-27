@@ -1,7 +1,7 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
+import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping, StandardUsage } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 import { normalizeProviderTokens } from './providers';
 import { CallLlmSpanAttributes, isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
@@ -28,13 +28,15 @@ const AI_SPAN_MATCHERS = [
   'ai.streamObject.doStream'
 ];
 
-const DEFAULT_USER_ID_ATTRS = ['ai.telemetry.metadata.userId', 'ai.telemetry.metadata.user_id'];
+const DEFAULT_USER_ID_ATTRS = ['ai.telemetry.metadata.userId'];
 
-const DEFAULT_WORKSPACE_ID_ATTRS = ['ai.telemetry.metadata.workspaceId', 'ai.telemetry.metadata.workspace_id'];
+const DEFAULT_WORKSPACE_ID_ATTRS = ['ai.telemetry.metadata.workspaceId'];
 
 export const USER_CONTEXT_KEY = Symbol('ai-sdk-cost-user');
 export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
 
+
+// ------For generating testing fixtures------
 export type SpanSampleLogger = (span: ReadableSpan, attrs: CallLlmSpanAttributes) => void;
 
 let spanSampleLogger: SpanSampleLogger | undefined;
@@ -51,6 +53,7 @@ function recordCallLlmSpanSample(span: ReadableSpan, attrs: CallLlmSpanAttribute
     // best-effort logging; ignore logging failures
   }
 }
+// --------------------------------------------
 
 function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
   const name = span.name ?? '';
@@ -117,10 +120,7 @@ function resolveContext(
   return { userId: userId ?? null, workspaceId: workspaceId ?? null };
 }
 
-function computeCostFromUsage(
-  usage: { input: number; output: number; cacheRead: number; cacheWrite: number },
-  price: PriceEntry | null
-): { costCents: number | null } {
+function computeCostFromUsage(usage: StandardUsage, price: PriceEntry | null): { costCents: number | null } {
   if (!price) return { costCents: null };
 
   const inputPrice = price.prompt_per_1m_usd ?? 0;
