@@ -153,28 +153,25 @@ export const spanToLog = (span: ReadableSpan, options: ExporterOptions): TokenLo
 
   recordCallLlmSpanSample(span, attrs);
 
+  
+  // Layered model resolution: per-call override → response alias → model.id → request target.
   const modelOverride = attrs['ai.telemetry.metadata.modelName'];
-
   const responseModel = attrs['ai.response.model'];
   const requestedModel = attrs['gen_ai.request.model'];
   const baseModel = attrs['ai.model.id'];
 
-  // Layered model resolution: per-call override → response alias → model.id → request target.
   const modelCandidates = [modelOverride, responseModel, baseModel, requestedModel];
   const primaryModel = modelCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0) ?? 'unknown';
   const model = options.modelMapping?.[primaryModel] ?? primaryModel;
 
+  // Resolve provider from attributes - TODO(R0bk): Add provider override
   const provider = attrs['ai.model.provider'];
-
-  const inputTokens = attrs['gen_ai.usage.input_tokens'];
-  const outputTokens = attrs['gen_ai.usage.output_tokens'];
-  const cacheReadTokens = attrs['gen_ai.usage.cachedInputTokens'] as number | undefined ?? 0;
 
   // Provider fixes unify token accounting before cost math.
   const normalizedTokens = normalizeProviderTokens(provider, attrs, {
-    input: inputTokens,
-    output: outputTokens,
-    cacheRead: cacheReadTokens,
+    input: attrs['gen_ai.usage.input_tokens'],
+    output: attrs['gen_ai.usage.output_tokens'],
+    cacheRead: attrs['gen_ai.usage.cachedInputTokens'] as number | undefined ?? 0,
     cacheWrite: 0
   });
 
