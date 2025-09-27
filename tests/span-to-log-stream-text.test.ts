@@ -104,6 +104,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 563);
   assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-1");
+  assert.equal(log.workspace_id, "workspace-1");
 })();
 
 (() => {
@@ -113,6 +115,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 444);
   assert.equal(log.cache_read, 2048);
   assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-2");
+  assert.equal(log.workspace_id, "workspace-2");
 })();
 
 (() => {
@@ -122,6 +126,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 532);
   assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-3");
+  assert.equal(log.workspace_id, "workspace-3");
 })();
 
 (() => {
@@ -131,6 +137,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 239);
   assert.equal(log.cache_read, 2025);
   assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-4");
+  assert.equal(log.workspace_id, "workspace-4");
 })();
 
 (() => {
@@ -140,6 +148,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 138);
   assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 2906);
+  assert.equal(log.user_id, "user-5");
+  assert.equal(log.workspace_id, "workspace-5");
 })();
 
 (() => {
@@ -149,4 +159,6 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
   assert.equal(log.output, 108);
   assert.equal(log.cache_read, 2906);
   assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-6");
+  assert.equal(log.workspace_id, "workspace-6");
 })();
