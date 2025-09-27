@@ -3,7 +3,7 @@ import { anthropicMetadataSchema } from './anthropic';
 import { googleMetadataSchema } from './google';
 import { openaiMetadataSchema } from './openai';
 import { CallLlmSpanAttributes, TelemetryStructuredValue } from '../telemetry-types';
-import { NumberLike, StandardUsage } from '../types';
+import { StandardUsage } from '../types';
 export * from './anthropic';
 export * from './google';
 export * from './openai';
@@ -12,7 +12,7 @@ const toFiniteAttrNumber = (value: TelemetryStructuredValue | undefined): number
   return typeof value === 'number' || typeof value === 'string' ? toFiniteNumber(value) : undefined;
 };
 
-const toFiniteNumber = (value: NumberLike): number | undefined => {
+const toFiniteNumber = (value: number | string | null | undefined): number | undefined => {
   if (value === undefined || value === null) return undefined;
   const num = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(num) ? num : undefined;

@@ -1,5 +1,3 @@
-export type NumberLike = number | string | null | undefined;
-
 export type StandardUsage = {
   input: number;
   output: number;

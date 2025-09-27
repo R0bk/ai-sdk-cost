@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { nullishInt, optionalString } from './schema-helpers';
+import { nullishInt } from './schema-helpers';
 
 const openaiUsageSchema = z
   .looseObject({
@@ -13,8 +13,8 @@ const openaiUsageSchema = z
 export const openaiMetadataSchema = z.looseObject({
   openai: z
     .looseObject({
-      responseId: optionalString(),
-      serviceTier: optionalString(),
+      responseId: z.string().optional(),
+      serviceTier: z.string().optional(),
       usage: openaiUsageSchema
     })
     .nullish()

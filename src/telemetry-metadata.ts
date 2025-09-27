@@ -1,18 +1,24 @@
 import { z } from 'zod/v4';
 import { packagedOpenRouterPricing } from './openrouter';
+import openRouterPricingJson from './data/openrouter-pricing.json';
 
-const openRouterModelNames = Object.keys(packagedOpenRouterPricing);
-const openRouterModelSet = new Set(openRouterModelNames.map((key) => key.toLowerCase()));
+type RawOpenRouterModel = keyof typeof openRouterPricingJson;
+export type KnownOpenRouterModel = Lowercase<RawOpenRouterModel>;
 
-const telemetryMetadataShape = {
+const openRouterModelNames = Object.keys(packagedOpenRouterPricing).map(
+  (key) => key.toLowerCase() as KnownOpenRouterModel
+);
+const openRouterModelSet = new Set<KnownOpenRouterModel>(openRouterModelNames);
+
+const AiCostMetadataShape = {
   userId: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),
   modelName: z.string().min(1).optional()
 };
 
-export const telemetryMetadataSchema = z.looseObject(telemetryMetadataShape).check((ctx) => {
+export const AiCostMetadataSchema = z.looseObject(AiCostMetadataShape).check((ctx) => {
   const model = ctx.value.modelName;
-  if (typeof model === 'string' && !openRouterModelSet.has(model.toLowerCase())) {
+  if (typeof model === 'string' && !openRouterModelSet.has(model.toLowerCase() as KnownOpenRouterModel)) {
     ctx.issues.push({
       code: 'custom',
       message: `Unknown modelName "${model}". Ensure the override matches a packaged OpenRouter model id.`,
@@ -23,9 +29,13 @@ export const telemetryMetadataSchema = z.looseObject(telemetryMetadataShape).che
   }
 });
 
-export type TelemetryMetadataInput = z.input<typeof telemetryMetadataSchema>;
-export type TelemetryMetadata = z.infer<typeof telemetryMetadataSchema>;
+export type AiCostMetadata = {
+  userId?: string;
+  workspaceId?: string;
+  modelName?: KnownOpenRouterModel;
+};
 
-export const knownOpenRouterModels = openRouterModelNames as readonly string[];
+export const knownOpenRouterModels = openRouterModelNames as readonly KnownOpenRouterModel[];
 
-export const isKnownOpenRouterModel = (value: string): boolean => openRouterModelSet.has(value.toLowerCase());
+export const isKnownOpenRouterModel = (value: string): value is KnownOpenRouterModel =>
+  openRouterModelSet.has(value.toLowerCase() as KnownOpenRouterModel);

@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { nullishInt, optionalString } from './schema-helpers';
+import { nullishInt } from './schema-helpers';
 
 const anthropicCacheCreationSchema = z
   .looseObject({
@@ -15,7 +15,7 @@ const anthropicUsageSchema = z
     cache_creation_input_tokens: nullishInt(),
     cache_read_input_tokens: nullishInt(),
     cache_creation: anthropicCacheCreationSchema,
-    service_tier: optionalString()
+    service_tier: z.string().optional(),
   })
   .nullish();
 
