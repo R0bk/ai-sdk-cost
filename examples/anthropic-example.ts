@@ -26,7 +26,13 @@ async function runAnthropic(prompt: string) {
   const stream = await streamText({
     model: anthropic('claude-3-5-haiku-20241022'),
     messages,
-    experimental_telemetry: { isEnabled: true }
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: {
+        userId: 'demo-user-anthropic',
+        workspaceId: 'demo-workspace-anthropic'
+      }
+    }
   });
 
   const chunks: string[] = [];

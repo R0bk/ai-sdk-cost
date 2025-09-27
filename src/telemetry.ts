@@ -1,8 +1,6 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import { appendFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 import { normalizeProviderTokens } from './providers';
@@ -37,22 +35,20 @@ const DEFAULT_WORKSPACE_ID_ATTRS = ['ai.telemetry.metadata.workspaceId', 'ai.tel
 export const USER_CONTEXT_KEY = Symbol('ai-sdk-cost-user');
 export const WORKSPACE_CONTEXT_KEY = Symbol('ai-sdk-cost-workspace');
 
-const SPAN_SAMPLE_DIR = join(process.cwd(), 'logs');
-const CALL_LLM_SAMPLE_FILE = join(SPAN_SAMPLE_DIR, 'call-llm-span-samples.ndjson');
+export type SpanSampleLogger = (span: ReadableSpan, attrs: CallLlmSpanAttributes) => void;
+
+let spanSampleLogger: SpanSampleLogger | undefined;
+
+export const registerSpanSampleLogger = (logger: SpanSampleLogger | null | undefined): void => {
+  spanSampleLogger = logger ?? undefined;
+};
 
 function recordCallLlmSpanSample(span: ReadableSpan, attrs: CallLlmSpanAttributes): void {
+  if (!spanSampleLogger) return;
   try {
-    mkdirSync(SPAN_SAMPLE_DIR, { recursive: true });
-    const payload = {
-      timestamp: new Date().toISOString(),
-      spanName: span.name,
-      spanId: span.spanContext().spanId,
-      traceId: span.spanContext().traceId,
-      attributes: attrs
-    };
-    appendFileSync(CALL_LLM_SAMPLE_FILE, `${JSON.stringify(payload)}\n`, 'utf8');
+    spanSampleLogger(span, attrs);
   } catch {
-    // best-effort logging; ignore filesystem issues
+    // best-effort logging; ignore logging failures
   }
 }
 
