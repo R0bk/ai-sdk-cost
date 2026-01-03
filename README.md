@@ -236,7 +236,7 @@ The library correctly handles each provider's unique telemetry format:
 - **OpenAI**: Cached tokens are included in `inputTokens` AND reported separately. We handle the deduplication automatically.
 - **Anthropic**: Cache reads are correctly separated from input tokens. No double-counting.
 - **Google / Gemini**: Differentiates between cached content and fresh prompt tokens sourced from provider metadata.
-- **xAI (Grok)**: Reads `prompt_tokens_details.cached_tokens` and similar fields so cached prompt chunks are excluded from billable input.
+- **xAI (Grok)**: Uses cached token counts when the provider reports them so reused prompt chunks are excluded from billable input.
 - **Mistral**: Normalizes `cached_tokens` and `cache_creation_input_tokens` to keep cache hits and writes distinct.
 - **Others**: Telemetry metadata is automatically extracted from various attribute formats.
 

@@ -1,6 +1,13 @@
 import { z } from 'zod/v4';
 import { nullishInt } from './schema-helpers';
 
+const xaiPromptTokenDetailsSchema = z
+  .looseObject({
+    cached_tokens: nullishInt(),
+    uncached_tokens: nullishInt()
+  })
+  .nullish();
+
 const xaiUsageSchema = z
   .looseObject({
     prompt_tokens: nullishInt(),
@@ -8,6 +15,7 @@ const xaiUsageSchema = z
     total_tokens: nullishInt(),
     reasoning_tokens: nullishInt(),
     cached_tokens: nullishInt(),
+    prompt_tokens_details: xaiPromptTokenDetailsSchema
   })
   .nullish();
 

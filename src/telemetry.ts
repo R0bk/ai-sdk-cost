@@ -227,3 +227,11 @@ export class AiSdkTokenExporter implements SpanExporter {
     return Promise.resolve();
   }
 }
+
+// Internal helpers exported for white-box tests; not part of the stable API surface.
+export const __telemetryInternals = {
+  lookupPrice,
+  computeCostFromUsage,
+  resolveContext,
+  computeTimestamp
+};
