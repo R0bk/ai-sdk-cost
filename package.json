@@ -1,6 +1,6 @@
 {
   "name": "ai-sdk-cost",
-  "version": "0.3.3",
+  "version": "1.3.3",
   "description": "DB-agnostic cost telemetry helper for Vercel AI SDK with OpenRouter pricing watcher",
   "license": "MIT",
   "repository": {
