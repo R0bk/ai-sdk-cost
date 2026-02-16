@@ -11,6 +11,7 @@ import googleWithCache from './fixtures/stream-text/google-with-cache.json' asse
 import openaiNoCache from './fixtures/stream-text/openai-no-cache.json' assert { type: 'json' };
 import openaiWithCache from './fixtures/stream-text/openai-with-cache.json' assert { type: 'json' };
 import xaiNoCache from './fixtures/stream-text/xai-no-cache.json' assert { type: 'json' };
+import xaiWithCache from './fixtures/stream-text/xai-with-cache.json' assert { type: 'json' };
 import mistralNoCache from './fixtures/stream-text/mistral-no-cache.json' assert { type: 'json' };
 
 type SpanFixture = {
@@ -45,6 +46,7 @@ const fixtures = {
   anthropicNoCache: asFixture(anthropicNoCache),
   anthropicWithCache: asFixture(anthropicWithCache),
   xaiNoCache: asFixture(xaiNoCache),
+  xaiWithCache: asFixture(xaiWithCache),
   mistralNoCache: asFixture(mistralNoCache),
 };
 
@@ -115,9 +117,9 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
 (() => {
   const log = toLog(fixtures.openaiWithCache);
   expectProvider(log.provider, 'openai');
-  assert.equal(log.input, 173);
-  assert.equal(log.output, 444);
-  assert.equal(log.cache_read, 2048);
+  assert.equal(log.input, 129);
+  assert.equal(log.output, 481);
+  assert.equal(log.cache_read, 1792);
   assert.equal(log.cache_write, 0);
   assert.equal(log.user_id, "user-2");
   assert.equal(log.workspace_id, "workspace-2");
@@ -126,8 +128,8 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
 (() => {
   const log = toLog(fixtures.googleNoCache);
   expectProvider(log.provider, 'google');
-  assert.equal(log.input, 2414);
-  assert.equal(log.output, 532);
+  assert.equal(log.input, 1995);
+  assert.equal(log.output, 1205);
   assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 0);
   assert.equal(log.user_id, "user-3");
@@ -137,9 +139,9 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
 (() => {
   const log = toLog(fixtures.googleWithCache);
   expectProvider(log.provider, 'google');
-  assert.equal(log.input, 389);
-  assert.equal(log.output, 239);
-  assert.equal(log.cache_read, 2025);
+  assert.equal(log.input, 985);
+  assert.equal(log.output, 1585);
+  assert.equal(log.cache_read, 1010);
   assert.equal(log.cache_write, 0);
   assert.equal(log.user_id, "user-4");
   assert.equal(log.workspace_id, "workspace-4");
@@ -148,10 +150,10 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
 (() => {
   const log = toLog(fixtures.anthropicNoCache);
   expectProvider(log.provider, 'anthropic');
-  assert.equal(log.input, 4);
-  assert.equal(log.output, 138);
+  assert.equal(log.input, 3);
+  assert.equal(log.output, 164);
   assert.equal(log.cache_read, 0);
-  assert.equal(log.cache_write, 2906);
+  assert.equal(log.cache_write, 2907);
   assert.equal(log.user_id, "user-5");
   assert.equal(log.workspace_id, "workspace-5");
 })();
@@ -159,32 +161,43 @@ const expectProvider = (provider: string | null | undefined, fragment: string) =
 (() => {
   const log = toLog(fixtures.anthropicWithCache);
   expectProvider(log.provider, 'anthropic');
-  assert.equal(log.input, 4);
-  assert.equal(log.output, 108);
-  assert.equal(log.cache_read, 2906);
+  assert.equal(log.input, 3);
+  assert.equal(log.output, 113);
+  assert.equal(log.cache_read, 2907);
+  assert.equal(log.cache_write, 0);
+  assert.equal(log.user_id, "user-5");
+  assert.equal(log.workspace_id, "workspace-5");
+})();
+
+(() => {
+  const log = toLog(fixtures.xaiNoCache);
+  expectProvider(log.provider, 'xai');
+  assert.equal(log.input, 1014);
+  assert.equal(log.output, 54);
+  assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 0);
   assert.equal(log.user_id, "user-6");
   assert.equal(log.workspace_id, "workspace-6");
 })();
 
 (() => {
-  const log = toLog(fixtures.xaiNoCache);
+  const log = toLog(fixtures.xaiWithCache);
   expectProvider(log.provider, 'xai');
-  assert.equal(log.input, 2166);
-  assert.equal(log.output, 598);
-  assert.equal(log.cache_read, 0);
+  assert.equal(log.input, 1831);
+  assert.equal(log.output, 726);
+  assert.equal(log.cache_read, 152);
   assert.equal(log.cache_write, 0);
-  assert.equal(log.user_id, "demo-user-xai");
-  assert.equal(log.workspace_id, "demo-workspace-xai");
+  assert.equal(log.user_id, "user-6");
+  assert.equal(log.workspace_id, "workspace-6");
 })();
 
 (() => {
   const log = toLog(fixtures.mistralNoCache);
   expectProvider(log.provider, 'mistral');
-  assert.equal(log.input, 2216);
-  assert.equal(log.output, 740);
+  assert.equal(log.input, 2162);
+  assert.equal(log.output, 656);
   assert.equal(log.cache_read, 0);
   assert.equal(log.cache_write, 0);
-  assert.equal(log.user_id, "demo-user-mistral");
-  assert.equal(log.workspace_id, "demo-workspace-mistral");
+  assert.equal(log.user_id, "user-7");
+  assert.equal(log.workspace_id, "workspace-7");
 })();

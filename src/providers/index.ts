@@ -68,8 +68,7 @@ export function normalizeProviderTokens(
   if (!provider) return sdkTokens;
 
   const providerLower = provider.toLowerCase();
-  const providerMetadata = parseProviderMetadata(attrs['ai.response.providerMetadata']);
-  if (!providerMetadata) return sdkTokens;
+  const providerMetadata = parseProviderMetadata(attrs['ai.response.providerMetadata']) ?? ({} as ProviderMetadata);
 
   const attrCachedTokens = toFiniteAttrNumber(attrs['ai.usage.cachedInputTokens']);
 
@@ -78,14 +77,17 @@ export function normalizeProviderTokens(
     const anthropicMetadata = providerMetadata.anthropic;
     const anthropicUsage = anthropicMetadata?.usage;
     if (anthropicUsage) {
-      // Provider metadata reports incorrect output_tokens; prefer SDK output.
       const cacheReadTokens = toFiniteNumber(anthropicUsage.cache_read_input_tokens);
       const cacheWriteTokens =
         toFiniteNumber(anthropicUsage.cache_creation_input_tokens) ??
         toFiniteNumber(anthropicMetadata?.cacheCreationInputTokens);
+      
+      // Vercel bundles cached tokens inside input_tokens; subtract the reused portion
+      // Note: Anthropic does not merge them so if you use provider metadata, you wont do this subtraction.
+      const actualInput = Math.max(0, sdkTokens.input - (cacheReadTokens ?? 0) - (cacheWriteTokens ?? 0));
 
       return {
-        input: sdkTokens.input,
+        input: actualInput,
         output: sdkTokens.output,
         cacheRead: cacheReadTokens ?? sdkTokens.cacheRead,
         cacheWrite: cacheWriteTokens ?? 0

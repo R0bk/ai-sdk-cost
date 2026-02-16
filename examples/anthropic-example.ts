@@ -40,8 +40,8 @@ async function runAnthropic(prompt: string) {
   for await (const part of stream.textStream) {
     chunks.push(part);
   }
-  const metadata = await stream.providerMetadata?.catch?.(() => undefined);
-  const usage = await stream.usage?.catch?.(() => undefined);
+  const metadata = stream.providerMetadata ? await stream.providerMetadata : undefined;
+  const usage = stream.usage ? await stream.usage : undefined;
   return { text: chunks.join(''), metadata, usage };
 }
 

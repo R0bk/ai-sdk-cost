@@ -3,298 +3,89 @@ import { normalizeProviderTokens } from '../../src/providers';
 import type { CallLlmSpanAttributes } from '../../src/telemetry-types';
 import type { StandardUsage } from '../../src/types';
 
-const baseUsage: StandardUsage = {
-  input: 100,
-  output: 10,
-  cacheRead: 0,
+import anthropicNoCache from '../fixtures/stream-text/anthropic-no-cache.json' assert { type: 'json' };
+import anthropicWithCache from '../fixtures/stream-text/anthropic-with-cache.json' assert { type: 'json' };
+import googleNoCache from '../fixtures/stream-text/google-no-cache.json' assert { type: 'json' };
+import googleWithCache from '../fixtures/stream-text/google-with-cache.json' assert { type: 'json' };
+import mistralNoCache from '../fixtures/stream-text/mistral-no-cache.json' assert { type: 'json' };
+import openaiNoCache from '../fixtures/stream-text/openai-no-cache.json' assert { type: 'json' };
+import openaiWithCache from '../fixtures/stream-text/openai-with-cache.json' assert { type: 'json' };
+import xaiNoCache from '../fixtures/stream-text/xai-no-cache.json' assert { type: 'json' };
+import xaiWithCache from '../fixtures/stream-text/xai-with-cache.json' assert { type: 'json' };
+
+type SpanFixture = { attributes: CallLlmSpanAttributes };
+
+const asAttrs = (fixture: SpanFixture): CallLlmSpanAttributes => fixture.attributes;
+
+const usageFromAttrs = (attrs: CallLlmSpanAttributes): StandardUsage => ({
+  input: Number(attrs['gen_ai.usage.input_tokens']) || 0,
+  output: Number(attrs['gen_ai.usage.output_tokens']) || 0,
+  cacheRead:
+    Number(
+      (attrs as Record<string, unknown>)['ai.usage.cachedInputTokens'] ??
+        (attrs as Record<string, unknown>)['gen_ai.usage.cachedInputTokens']
+    ) || 0,
   cacheWrite: 0
+});
+
+type Expectation = {
+  fixture: SpanFixture;
+  expected: StandardUsage;
+  label: string;
 };
 
-const baseAttrs: CallLlmSpanAttributes = {
-  'operation.name': 'ai.generateText.doGenerate',
-  'ai.operationId': 'ai.generateText.doGenerate',
-  'ai.model.id': 'base-model',
-  'ai.model.provider': 'base-provider',
-  'gen_ai.system': 'base-provider',
-  'gen_ai.request.model': 'base-model',
-  'gen_ai.usage.input_tokens': baseUsage.input,
-  'gen_ai.usage.output_tokens': baseUsage.output
-};
-
-const anthropicMetadata = {
-  anthropic: {
-    usage: {
-      input_tokens: 104,
-      output_tokens: 12,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 2903
-    },
-    cacheCreationInputTokens: 0
+const expectations: Expectation[] = [
+  {
+    label: 'OpenAI without cache',
+    fixture: openaiNoCache,
+    expected: { input: 2221, output: 563, cacheRead: 0, cacheWrite: 0 }
+  },
+  {
+    label: 'OpenAI with cache',
+    fixture: openaiWithCache,
+    expected: { input: 129, output: 481, cacheRead: 1792, cacheWrite: 0 }
+  },
+  {
+    label: 'Google without cache',
+    fixture: googleNoCache,
+    expected: { input: 1995, output: 1205, cacheRead: 0, cacheWrite: 0 }
+  },
+  {
+    label: 'Google with cache',
+    fixture: googleWithCache,
+    expected: { input: 985, output: 1585, cacheRead: 1010, cacheWrite: 0 }
+  },
+  {
+    label: 'Anthropic without cache (cache creation tokens tracked)',
+    fixture: anthropicNoCache,
+    expected: { input: 3, output: 164, cacheRead: 0, cacheWrite: 2907 }
+  },
+  {
+    label: 'Anthropic with cache hit',
+    fixture: anthropicWithCache,
+    expected: { input: 3, output: 113, cacheRead: 2907, cacheWrite: 0 }
+  },
+  {
+    label: 'xAI without cache data',
+    fixture: xaiNoCache,
+    expected: { input: 1014, output: 54, cacheRead: 0, cacheWrite: 0 }
+  },
+  {
+    label: 'xAI with cache data',
+    fixture: xaiWithCache,
+    expected: { input: 1831, output: 726, cacheRead: 152, cacheWrite: 0 }
+  },
+  {
+    label: 'Mistral without cache data',
+    fixture: mistralNoCache,
+    expected: { input: 2162, output: 656, cacheRead: 0, cacheWrite: 0 }
   }
-};
+];
 
-const openaiMetadata = {
-  openai: {
-    responseId: 'resp_test',
-    serviceTier: 'default',
-    usage: {
-      input_tokens: 200,
-      output_tokens: 20,
-      cached_input_tokens: 50
-    }
-  }
-};
-
-const googleMetadata = {
-  google: {
-    usageMetadata: {
-      promptTokenCount: 200,
-      cachedContentTokenCount: 120
-    }
-  }
-};
-
-const xaiMetadata = {
-  xai: {
-    usage: {
-      prompt_tokens: 640,
-      completion_tokens: 128,
-      prompt_tokens_details: {
-        cached_tokens: 480
-      }
-    }
-  }
-};
-
-const xaiMetadataNoCacheDetails = {
-  xai: {
-    usage: {
-      prompt_tokens: 420,
-      completion_tokens: 64
-    }
-  }
-};
-
-const mistralMetadata = {
-  mistral: {
-    usage: {
-      prompt_tokens: 512,
-      completion_tokens: 96,
-      cached_tokens: 352
-    }
-  }
-};
-
-const mistralMetadataNoCacheDetails = {
-  mistral: {
-    usage: {
-      prompt_tokens: 256,
-      completion_tokens: 32
-    }
-  }
-};
-
-const serialize = (value: unknown) => JSON.stringify(value);
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'anthropic',
-    'gen_ai.system': 'anthropic',
-    'ai.response.providerMetadata': serialize(anthropicMetadata)
-  };
-
-  const normalized = normalizeProviderTokens('anthropic', attrs, baseUsage);
-
-  assert.equal(normalized.input, baseUsage.input);
-  assert.equal(normalized.output, baseUsage.output);
-  assert.equal(normalized.cacheRead, 2903);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'openai',
-    'gen_ai.system': 'openai',
-    'ai.response.providerMetadata': serialize(openaiMetadata),
-    'ai.usage.cachedInputTokens': 25
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 200,
-    output: 20
-  };
-
-  const normalized = normalizeProviderTokens('openai', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 150);
-  assert.equal(normalized.output, 20);
-  assert.equal(normalized.cacheRead, 50);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'google',
-    'gen_ai.system': 'google',
-    'ai.response.providerMetadata': serialize(googleMetadata)
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 220
-  };
-
-  const normalized = normalizeProviderTokens('google', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 100);
-  assert.equal(normalized.output, baseUsage.output);
-  assert.equal(normalized.cacheRead, 120);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'xai.responses',
-    'gen_ai.system': 'xai',
-    'ai.response.providerMetadata': serialize(xaiMetadata)
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 640,
-    output: 128
-  };
-
-  const normalized = normalizeProviderTokens('xai', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 160);
-  assert.equal(normalized.output, 128);
-  assert.equal(normalized.cacheRead, 480);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'xai.responses',
-    'gen_ai.system': 'xai',
-    'ai.response.providerMetadata': xaiMetadataNoCacheDetails,
-    'ai.usage.cachedInputTokens': 300
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 420,
-    output: 64,
-    cacheRead: 12
-  };
-
-  const normalized = normalizeProviderTokens('grok-beta', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 120);
-  assert.equal(normalized.output, 64);
-  assert.equal(normalized.cacheRead, 300);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'mistral',
-    'gen_ai.system': 'mistral',
-    'ai.response.providerMetadata': serialize(mistralMetadata)
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 512,
-    output: 96
-  };
-
-  const normalized = normalizeProviderTokens('mistral', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 160);
-  assert.equal(normalized.output, 96);
-  assert.equal(normalized.cacheRead, 352);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'mistral',
-    'gen_ai.system': 'mistral',
-    'ai.response.providerMetadata': mistralMetadataNoCacheDetails,
-    'ai.usage.cachedInputTokens': 128
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 256,
-    output: 32,
-    cacheRead: 0
-  };
-
-  const normalized = normalizeProviderTokens('Mistral-large', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 128);
-  assert.equal(normalized.output, 32);
-  assert.equal(normalized.cacheRead, 128);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'anthropic',
-    'gen_ai.system': 'anthropic',
-    'ai.response.providerMetadata': anthropicMetadata
-  };
-
-  const normalized = normalizeProviderTokens('anthropic', attrs, baseUsage);
-
-  assert.equal(normalized.input, baseUsage.input);
-  assert.equal(normalized.output, baseUsage.output);
-  assert.equal(normalized.cacheRead, 2903);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'openai',
-    'gen_ai.system': 'openai',
-    'ai.response.providerMetadata': openaiMetadata
-  };
-
-  const sdkUsage: StandardUsage = {
-    ...baseUsage,
-    input: 180,
-    output: 18
-  };
-
-  const normalized = normalizeProviderTokens('openai', attrs, sdkUsage);
-
-  assert.equal(normalized.input, 130);
-  assert.equal(normalized.output, 18);
-  assert.equal(normalized.cacheRead, 50);
-  assert.equal(normalized.cacheWrite, 0);
-})();
-
-(() => {
-  const attrs: CallLlmSpanAttributes = {
-    ...baseAttrs,
-    'ai.model.provider': 'anthropic',
-    'gen_ai.system': 'anthropic',
-    'ai.response.providerMetadata': '{"invalid": }'
-  };
-
-  const normalized = normalizeProviderTokens('anthropic', attrs, baseUsage);
-
-  assert.deepEqual(normalized, baseUsage);
-})();
+for (const { label, fixture, expected } of expectations) {
+  (() => {
+    const attrs = asAttrs(fixture);
+    const normalized = normalizeProviderTokens(attrs['ai.model.provider'], attrs, usageFromAttrs(attrs));
+    assert.deepEqual(normalized, expected, label);
+  })();
+}
