@@ -9,7 +9,7 @@ if (entries.length === 0) {
 
 const requiredModels = [
   'openai/gpt-5-nano',
-  'anthropic/claude-3-5-haiku-20241022'
+  'anthropic/claude-3-5-haiku'
 ];
 
 const missing = requiredModels.filter((id) => !pricing[id.toLowerCase()]);
@@ -35,6 +35,6 @@ function computeCostCents(usage: { input: number; output: number; cache: number 
 }
 
 computeCostCents({ input: 0.0002, output: 0.00015, cache: 0 }, 'openai/gpt-5-nano');
-computeCostCents({ input: 0.00005, output: 0.0002, cache: 0.0001 }, 'anthropic/claude-3-5-haiku-20241022');
+computeCostCents({ input: 0.00005, output: 0.0002, cache: 0.0001 }, 'anthropic/claude-3-5-haiku');
 
 console.log('Pricing snapshot sanity checks passed.');
