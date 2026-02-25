@@ -123,24 +123,21 @@ initAiSdkCostTelemetry({
 
 ## Advanced Features
 
-### Watch OpenRouter Pricing at Runtime
+### Custom Pricing Map
+
+Pass your own pricing data instead of using the bundled defaults. This lets you live-update prices without upgrading the package:
 
 ```ts
-import { startOpenRouterPriceWatcher } from 'ai-sdk-cost';
+import { fetchOpenRouterPricing, initAiSdkCostTelemetry } from 'ai-sdk-cost';
 
-const stop = startOpenRouterPriceWatcher({
-  intervalMs: 6 * 60 * 60 * 1000,
-  onUpdate(prices) {
-    console.log('OpenRouter pricing changed', Object.keys(prices).length);
-  }
-});
-
-// Later: stop();
+// Fetch latest prices at startup
+const pricing = await fetchOpenRouterPricing();
+initAiSdkCostTelemetry({ pricing });
 ```
 
 ### Access Bundled Pricing Data
 
-The package ships with curated OpenRouter pricing for major providers. Access it without network calls:
+The package ships with curated OpenRouter pricing for major providers. When no `pricing` option is provided, this is used automatically. You can also access it directly:
 
 ```ts
 import { getPackagedOpenRouterPricing } from 'ai-sdk-cost';
