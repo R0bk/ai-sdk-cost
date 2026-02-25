@@ -12,13 +12,13 @@ importers:
         specifier: ^1.8.0
         version: 1.9.0
       '@opentelemetry/core':
-        specifier: ^2.5.0
+        specifier: ^2.2.0
         version: 2.5.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base':
-        specifier: ^2.5.0
+        specifier: ^2.2.0
         version: 2.5.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-node':
-        specifier: ^2.5.0
+        specifier: ^2.2.0
         version: 2.5.1(@opentelemetry/api@1.9.0)
       zod:
         specifier: ^3.23.8

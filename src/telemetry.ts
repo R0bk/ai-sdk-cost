@@ -1,7 +1,7 @@
 import { context } from '@opentelemetry/api';
 import { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import type { PriceEntry, TokenLog, TokenLogSink, ModelMapping, StandardUsage } from './types';
+import type { PriceEntry, PriceMap, TokenLog, TokenLogSink, ModelMapping, StandardUsage } from './types';
 import { packagedOpenRouterPricing } from './openrouter';
 import { normalizeProviderTokens } from './providers';
 import { CallLlmSpanAttributes, isCallLlmSpanAttributes, isStreamFinishEventAttributes, TelemetryAttributeBag } from './telemetry-types';
@@ -19,6 +19,8 @@ export type ExporterOptions = {
   workspaceIdAttributes?: string[];
   modelMapping?: ModelMapping;
   includeAttributes?: boolean;
+  /** Custom pricing map. Defaults to the packaged OpenRouter pricing when omitted. */
+  pricing?: PriceMap;
 };
 
 const AI_SPAN_MATCHERS = [
@@ -60,8 +62,8 @@ function looksLikeAiSdkSpan(span: ReadableSpan): boolean {
   return AI_SPAN_MATCHERS.some((matcher) => name.includes(matcher));
 }
 
-function lookupPrice(provider: string | null | undefined, model: string): PriceEntry | null {
-  const entries = packagedOpenRouterPricing;
+function lookupPrice(provider: string | null | undefined, model: string, pricing?: PriceMap): PriceEntry | null {
+  const entries = pricing ?? packagedOpenRouterPricing;
   const normalizedModel = model.toLowerCase();
   const providerFragment = provider ? provider.toLowerCase().split(/[^a-z0-9]+/)[0] : '';
 
@@ -175,7 +177,7 @@ export const spanToLog = (span: ReadableSpan, options: ExporterOptions): TokenLo
     cacheWrite: 0
   });
 
-  const price = lookupPrice(provider, model);
+  const price = lookupPrice(provider, model, options.pricing);
   const { costCents } = computeCostFromUsage(normalizedTokens, price);
 
   // Capture finish reason with GenAI semantics fallback.

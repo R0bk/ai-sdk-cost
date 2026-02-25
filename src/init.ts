@@ -1,5 +1,5 @@
 import { consoleSink } from './sinks';
-import type { TokenLogSink, ModelMapping } from './types';
+import type { TokenLogSink, ModelMapping, PriceMap } from './types';
 import { AiSdkTokenExporter, type ExporterOptions, type ExporterContextResolver } from './telemetry';
 import type { SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
@@ -21,6 +21,8 @@ export type TelemetryInitOptions = {
   modelMapping?: ModelMapping;
   /** Include full telemetry attributes in logs (default false, use true for debugging). */
   includeAttributes?: boolean;
+  /** Custom pricing map for cost calculation. Defaults to the packaged OpenRouter pricing when omitted. */
+  pricing?: PriceMap;
   /** Supply your own span processor (defaults to BatchSpanProcessor). */
   spanProcessor?: SpanProcessor;
   /**
@@ -59,7 +61,8 @@ function buildExporterOptions(options: TelemetryInitOptions): ExporterOptions {
     workspaceIdAttributes: options.workspaceIdAttributes ?? DEFAULT_WORKSPACE_ATTRS,
     getContext: options.getContext,
     modelMapping: options.modelMapping,
-    includeAttributes: options.includeAttributes
+    includeAttributes: options.includeAttributes,
+    pricing: options.pricing
   };
 }
 
